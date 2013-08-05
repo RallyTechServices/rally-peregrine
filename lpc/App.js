@@ -1,9 +1,11 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    _release: null,
     _iterations: [],
     _release_flow_hash: {},
     _asynch_return_flags: {},
+    _velocities: {}, 
     defaults: { padding: 10 },
     items: [
         {xtype:'container',itemId:'release_selector_box'},
@@ -20,24 +22,24 @@ Ext.define('CustomApp', {
                 scope: this,
                 change: function(rb,new_value,old_value){
                     this._asynch_return_flags = {};
-                    this._findIterationsBetweenDates(rb.getRecord().get(rb.getStartDateField()),rb.getRecord().get(rb.getEndDateField()));
                     this._release = rb.getRecord();
+                    this._findIterationsBetweenDates();
                 },
                 ready: function(rb) {
                     this._asynch_return_flags = {};
-                    this._findIterationsBetweenDates(rb.getRecord().get(rb.getStartDateField()),rb.getRecord().get(rb.getEndDateField()));
                     this._release = rb.getRecord();
+                    this._findIterationsBetweenDates();
                 }
             }
         });
     },
-    _findIterationsBetweenDates: function( start_date, end_date ) {
-        this._log('Find iterations between ' + start_date + ' and ' + end_date );
+    _findIterationsBetweenDates: function(  ) {
         if ( this._chart ) { this._chart.destroy(); }
         // dates are given in JS, but we need them to be ISO
-        var start_date_iso = Rally.util.DateTime.toIsoString(start_date);
-        var end_date_iso = Rally.util.DateTime.toIsoString(end_date);
-        
+        var start_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseStartDate'));
+        var end_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseDate'));
+        this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
+
         var iteration_query = [
             {property:"StartDate",operator:">=",value:start_date_iso},
             {property:"EndDate",operator:"<=",value:end_date_iso}
@@ -54,11 +56,71 @@ Ext.define('CustomApp', {
                 load: function(store,records) {
                     this._iterations = records;
                     this._findReleaseBacklogAtEachIteration();
+                    this._findAcceptedItemsInEachIteration();
                     this._asynch_return_flags["iterations"] = true;
                     this._makeChart();
                 }
             }
         });
+    },
+    _findAcceptedItemsInEachIteration: function() {
+        var me = this;
+
+        var iteration_query = [
+            {property:"ScheduleState",operator:">=",value:"Accepted"},
+            {property:"Release.Name",operator:"=",value:this._release.get("Name")}
+        ];
+        
+        this._velocities = {}; // key will be iteration name
+        Ext.create('Rally.data.WsapiDataStore',{
+            model:'UserStory',
+            autoLoad: true,
+            filters: iteration_query,
+            fetch:['Name','PlanEstimate','Iteration'],
+            context: { projectScopeDown: false },
+            listeners:{
+                scope: this,
+                load: function(store,records) {
+                    Ext.Array.each(records,function(record){
+                        var iteration_name = record.get('Iteration').Name;
+                        if ( record.get('PlanEstimate') ) {
+                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                me._log("clearing velocity for " + iteration_name);
+                                me._velocities[iteration_name] = 0;
+                            }
+                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                        }
+                    });
+                    this._asynch_return_flags["story_velocity"] = true;
+                    this._makeChart();
+                }
+            }
+        });
+        Ext.create('Rally.data.WsapiDataStore',{
+            model:'Defect',
+            autoLoad: true,
+            filters: iteration_query,
+            fetch:['Name','PlanEstimate','Iteration'],
+            context: { projectScopeDown: false },
+            listeners:{
+                scope: this,
+                load: function(store,records) {
+                    Ext.Array.each(records,function(record){
+                        var iteration_name = record.get('Iteration').Name;
+                        if ( record.get('PlanEstimate') ) {
+                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                me._log("clearing velocity for " + iteration_name);
+                                me._velocities[iteration_name] = 0;
+                            }
+                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                        }
+                    });
+                    this._asynch_return_flags["defect_velocity"] = true;
+                    this._makeChart();
+                }
+            }
+        });
+
     },
     _findReleaseBacklogAtEachIteration: function() {
         var me = this;
@@ -103,9 +165,18 @@ Ext.define('CustomApp', {
             this._log("Not yet received the iteration timebox data");
             proceed = false;
         }
+        if (!this._asynch_return_flags["story_velocity"]) {
+            this._log("Not yet received the story velocity data");
+            proceed = false;
+        }
+        if (!this._asynch_return_flags["defect_velocity"]) {
+            this._log("Not yet received the defect velocity data");
+            proceed = false;
+        }
         return proceed;
     },
     _makeChart: function() {
+        this._log(this._velocities);
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length == 0) {
                 this._chart = this.down('#chart_box').add({
@@ -122,7 +193,8 @@ Ext.define('CustomApp', {
                         categories: chart_hash.Name,
                         series: [
                             {type:'line',data:chart_hash.CumulativePlannedVelocity,name:'Planned Velocity',visible:true},
-                            {type:'line',data:chart_hash.TotalBacklog,name:'Total Backlog',visible:true}
+                            {type:'line',data:chart_hash.TotalBacklog,name:'Total Backlog',visible:true},
+                            {type:'line',data:chart_hash.CumulativeActualVelocity,name:'Actual Velocity',visible:true}
                         ]
                     },
                     height: 350,
@@ -141,19 +213,28 @@ Ext.define('CustomApp', {
             Name: [],
             TotalBacklog: [],
             PlannedVelocity: [],
-            CumulativePlannedVelocity: []
+            ActualVelocity: [],
+            CumulativePlannedVelocity: [],
+            CumulativeActualVelocity: []
         }
         var planned_velocity_adder = 0;
+        var actual_velocity_adder = 0;
         Ext.Array.each(this._iterations,function(iteration){
             
             var planned_velocity = iteration.get('PlannedVelocity') || 0;
             planned_velocity_adder += planned_velocity;
             
             var backlog = me._getBacklogOnEndOfIteration(iteration);
-
+            
+            var actual_velocity = me._velocities[iteration.get('Name')] || 0;
+            actual_velocity_adder += actual_velocity;
+            
             data.Name.push(iteration.get('Name'));
             data.PlannedVelocity.push(planned_velocity);
+            data.ActualVelocity.push(actual_velocity);
+            
             data.CumulativePlannedVelocity.push(planned_velocity_adder);
+            data.CumulativeActualVelocity.push(actual_velocity_adder);
             data.TotalBacklog.push(backlog);
             
         });
