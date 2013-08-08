@@ -44,6 +44,36 @@ Ext.define('CustomApp', {
         });
     },
 
+    _findCurrentIteration: function() {
+        var todayDate = new Date();
+
+        var todayISOString = Rally.util.DateTime.toIsoString(todayDate).replace(/T.*$/,"");
+        this._log('Find iterations where StartDate <= ' + todayISOString + ' and EndDate >= ' + todayISOString );
+
+        var iteration_query = [
+            { property: "StartDate", operator:"<=", value: todayISOString },
+            { property: "EndDate", operator:">=", value: todayISOString }
+        ];
+        
+        var currentIterationStore = Ext.create('Rally.data.WsapiDataStore',{
+            model: 'Iteration',
+            autoLoad: true,
+            filters: iteration_query,
+            fetch: ['Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
+            context: { projectScopeDown: false },
+            listeners: {
+                scope: this,
+                load: function(store, records) {
+                    // This will be not be correct if we have overlapping iterations for some reason
+                    currentIteration = records[0].data;
+                    this._currentIteration = currentIteration;
+                    this._asynch_return_flags["currentIteration"] = true;
+                    this._makeChart();
+                }
+            }
+        });
+    },    
+
     _findIterationsBetweenDates: function(  ) {
         if ( this._chart ) { this._chart.destroy(); }
         // dates are given in JS, but we need them to be ISO
@@ -145,17 +175,17 @@ Ext.define('CustomApp', {
         });
         
         Ext.create('Rally.data.WsapiDataStore',{
-            model:'ReleaseCumulativeFlowData',
-            autoLoad:true,
-            filters:release_check,
+            model: 'ReleaseCumulativeFlowData',
+            autoLoad: true,
+            filters: release_check,
             limit: 5000,
-            listeners:{
-                scope:this,
-                load:function(store,cards){
+            listeners: {
+                scope: this,
+                load: function(store, cards) {
                     me._release_flow_hash = {}; // key is date (NOT date/time)
                     // each record is a sum of items in a particular state for the release on a given date
                     // could be 4-6 records for each day (one for each schedule state)
-                    Ext.Array.each(cards,function(card){
+                    Ext.Array.each(cards, function(card) {
                         var capture_date = Rally.util.DateTime.toIsoString(
                             card.get('CreationDate')
                         ).replace(/T.*$/,"");
@@ -193,37 +223,11 @@ Ext.define('CustomApp', {
             this._log("Not yet received the defect velocity data");
             proceed = false;
         }
+        if (!this._asynch_return_flags["currentIteration"]) {
+            this._log("Not yet received the Current Iteration");
+            proceed = false;
+        }
         return proceed;
-    },
-
-    _findCurrentIteration: function() {
-        var todayDate = new Date();
-
-        var todayISOString = Rally.util.DateTime.toIsoString(todayDate).replace(/T.*$/,"");
-        this._log('Find iterations where StartDate <= ' + todayISOString + ' and EndDate >= ' + todayISOString );
-
-        var iteration_query = [
-            { property: "StartDate", operator:"<=", value: todayISOString },
-            { property: "EndDate", operator:">=", value: todayISOString }
-        ];
-        
-        var currentIterationStore = Ext.create('Rally.data.WsapiDataStore',{
-            model: 'Iteration',
-            autoLoad: true,
-            filters: iteration_query,
-            fetch: ['Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
-            context: { projectScopeDown: false },
-            listeners: {
-                scope: this,
-                load: function(store, records) {
-                    // This will be not be correct if we have overlapping iterations for some reason
-                    currentIteration = records[0].data;
-                    this._currentIteration = currentIteration;
-                    this._asynch_return_flags["currentIteration"] = true;
-                    this._makeChart();
-                }
-            }
-        });
     },
 
     _makeChart: function() {
