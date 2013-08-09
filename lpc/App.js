@@ -39,7 +39,6 @@ Ext.define('CustomApp', {
                     this._asynch_return_flags = {};
                     this._release = rb.getRecord();
                     this._findIterationsBetweenDates();
-                    this._findCurrentIteration();
                 }
             }
         });
@@ -104,6 +103,8 @@ Ext.define('CustomApp', {
                 }
             }
         });
+
+        this._findCurrentIteration();
     },
 
     _findAcceptedItemsInEachIteration: function() {
@@ -191,12 +192,10 @@ Ext.define('CustomApp', {
                         var capture_date = Rally.util.DateTime.toIsoString(
                             card.get('CreationDate')
                         ).replace(/T.*$/,"");
-
-                        me._doubleLineLog("capture_date:", capture_date);
+                        // me._doubleLineLog("capture_date:", capture_date);
 
                         var plan_estimate = card.get('CardEstimateTotal');
-
-                        me._doubleLineLog("plan_estimate", plan_estimate)
+                        // me._doubleLineLog("plan_estimate", plan_estimate)
                         
                         if ( !me._release_flow_hash[capture_date] ) {
                             me._release_flow_hash[capture_date] = 0;
@@ -204,7 +203,7 @@ Ext.define('CustomApp', {
 
                         me._release_flow_hash[capture_date] += plan_estimate;
                     });
-                    me._doubleLineLog("this._release_flow_hash::", me._release_flow_hash);
+                    // me._doubleLineLog("this._release_flow_hash::", me._release_flow_hash);
                     this._asynch_return_flags["flows"] = true;
                     me._makeChart();
                 }
@@ -239,8 +238,8 @@ Ext.define('CustomApp', {
 
     _makeChart: function() {
 
-        this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
-        this._log(this._velocities);
+        // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
+        // this._doubleLineLog("this._velocities", this._velocities);
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length == 0) {
                 this._chart = this.down('#chart_box').add({
@@ -337,18 +336,20 @@ Ext.define('CustomApp', {
             
             data.CumulativePlannedVelocity.push(planned_velocity_adder);
             // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
-            if (current_iterationDate && this_end_date > current_iterationEndDate) {
+            if (this_end_date > current_iterationEndDate) {
                 actual_velocity_adder = null;
             }
             data.CumulativeActualVelocity.push(actual_velocity_adder);
             data.TotalBacklog.push(backlog);
 
+            /* --
             me._log("data as pushed:");
             me._doubleLineLog("name", iteration.get('Name'));
             me._doubleLineLog("this_end_date", this_end_date);            
             me._doubleLineLog("planned_velocity", planned_velocity);
             me._doubleLineLog("actual_velocity", actual_velocity);
             me._doubleLineLog("backlog", backlog);
+            -- */
 
         });
 
@@ -358,10 +359,10 @@ Ext.define('CustomApp', {
     _getBacklogOnEndOfIteration: function(iteration) {
         var backlog = null;
         var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate')).replace(/T.*$/,"");
-        this._doubleLineLog("iteration_end", iteration_end);
+        // this._doubleLineLog("iteration_end", iteration_end);
         if (this._release_flow_hash[iteration_end]) {
             backlog = this._release_flow_hash[iteration_end];
-            this._doubleLineLog("backlog", backlog);
+            // this._doubleLineLog("backlog", backlog);
         }
         return backlog;
     },
