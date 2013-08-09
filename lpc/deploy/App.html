@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>LPC</title>
+    <title>MyLPC</title>
 
     <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
 
@@ -17,7 +17,7 @@
                 componentCls: 'app',
                 _release: null,
                 _iterations: [],
-                _currentIteration: null,
+                _current_iteration: null,
                 _release_flow_hash: {},
                 _asynch_return_flags: {},
                 _velocities: {}, 
@@ -43,7 +43,7 @@
                         xtype:'rallyreleasecombobox',
                         listeners: {
                             scope: this,
-                            change: function(rb, new_value,old_value){
+                            change: function(rb, new_value, old_value) {
                                 this._asynch_return_flags = {};
                                 this._release = rb.getRecord();
                                 this._findIterationsBetweenDates();
@@ -57,6 +57,36 @@
                         }
                     });
                 },
+            
+                _findCurrentIteration: function() {
+                    var today_date = new Date();
+            
+                    var today_iso_string = Rally.util.DateTime.toIsoString(today_date).replace(/T.*$/,"");
+                    this._log('Find iterations where StartDate <= ' + today_iso_string + ' and EndDate >= ' + today_iso_string );
+            
+                    var iteration_query = [
+                        { property: "StartDate", operator:"<=", value: today_iso_string },
+                        { property: "EndDate", operator:">=", value: today_iso_string }
+                    ];
+                    
+                    var current_iteration_store = Ext.create('Rally.data.WsapiDataStore',{
+                        model: 'Iteration',
+                        autoLoad: true,
+                        filters: iteration_query,
+                        fetch: ['Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
+                        context: { projectScopeDown: false },
+                        listeners: {
+                            scope: this,
+                            load: function(store, records) {
+                                // This will be not be correct if we have overlapping iterations for some reason
+                                current_iteration = records[0].data;
+                                this._current_iteration = current_iteration;
+                                this._asynch_return_flags["current_iteration"] = true;
+                                this._makeChart();
+                            }
+                        }
+                    });
+                },    
             
                 _findIterationsBetweenDates: function(  ) {
                     if ( this._chart ) { this._chart.destroy(); }
@@ -94,10 +124,11 @@
             
                     var iteration_query = [
                         { property: "ScheduleState", operator: ">=", value: "Accepted"},
-                        {property: "Release.Name", operator: "=", value:this._release.get("Name") }
+                        { property: "Release.Name", operator: "=", value:this._release.get("Name") }
                     ];
                     
                     this._velocities = {}; // key will be iteration name
+            
                     Ext.create('Rally.data.WsapiDataStore',{
                         model:'UserStory',
                         autoLoad: true,
@@ -106,7 +137,7 @@
                         context: { projectScopeDown: false },
                         listeners:{
                             scope: this,
-                            load: function(store,records) {
+                            load: function(store, records) {
                                 Ext.Array.each(records,function(record){
                                     var iteration_name = record.get('Iteration').Name;
                                     if ( record.get('PlanEstimate') ) {
@@ -114,7 +145,7 @@
                                             me._log("clearing velocity for " + iteration_name);
                                             me._velocities[iteration_name] = 0;
                                         }
-                                        me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                                        me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                     }
                                 });
                                 this._asynch_return_flags["story_velocity"] = true;
@@ -139,7 +170,7 @@
                                             me._log("clearing velocity for " + iteration_name);
                                             me._velocities[iteration_name] = 0;
                                         }
-                                        me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                                        me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                     }
                                 });
                                 this._asynch_return_flags["defect_velocity"] = true;
@@ -159,21 +190,27 @@
                     });
                     
                     Ext.create('Rally.data.WsapiDataStore',{
-                        model:'ReleaseCumulativeFlowData',
-                        autoLoad:true,
-                        filters:release_check,
+                        model: 'ReleaseCumulativeFlowData',
+                        autoLoad: true,
+                        filters: release_check,
                         limit: 5000,
-                        listeners:{
-                            scope:this,
-                            load:function(store,cards){
+                        listeners: {
+                            scope: this,
+                            load: function(store, cards) {
                                 me._release_flow_hash = {}; // key is date (NOT date/time)
                                 // each record is a sum of items in a particular state for the release on a given date
                                 // could be 4-6 records for each day (one for each schedule state)
-                                Ext.Array.each(cards,function(card){
+                                Ext.Array.each(cards, function(card) {
                                     var capture_date = Rally.util.DateTime.toIsoString(
                                         card.get('CreationDate')
                                     ).replace(/T.*$/,"");
+            
+                                    console.log("capture_date: ");
+                                    console.log(capture_date);
+            
                                     var plan_estimate = card.get('CardEstimateTotal');
+                                    console.log("plan_estimate:");
+                                    console.log(plan_estimate);
                                     
                                     if ( !me._release_flow_hash[capture_date] ) {
                                         me._release_flow_hash[capture_date] = 0;
@@ -181,6 +218,7 @@
             
                                     me._release_flow_hash[capture_date] += plan_estimate;
                                 });
+                                console.log("this._release_flow_hash:");
                                 me._log(me._release_flow_hash);
                                 this._asynch_return_flags["flows"] = true;
                                 me._makeChart();
@@ -207,40 +245,15 @@
                         this._log("Not yet received the defect velocity data");
                         proceed = false;
                     }
+                    if (!this._asynch_return_flags["current_iteration"]) {
+                        this._log("Not yet received the Current Iteration");
+                        proceed = false;
+                    }
                     return proceed;
                 },
             
-                _findCurrentIteration: function() {
-                    var todayDate = new Date();
-            
-                    var todayISOString = Rally.util.DateTime.toIsoString(todayDate).replace(/T.*$/,"");
-                    this._log('Find iterations where StartDate <= ' + todayISOString + ' and EndDate >= ' + todayISOString );
-            
-                    var iteration_query = [
-                        { property: "StartDate", operator:"<=", value: todayISOString },
-                        { property: "EndDate", operator:">=", value: todayISOString }
-                    ];
-                    
-                    var currentIterationStore = Ext.create('Rally.data.WsapiDataStore',{
-                        model: 'Iteration',
-                        autoLoad: true,
-                        filters: iteration_query,
-                        fetch: ['Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
-                        context: { projectScopeDown: false },
-                        listeners: {
-                            scope: this,
-                            load: function(store, records) {
-                                // This will be not be correct if we have overlapping iterations for some reason
-                                currentIteration = records[0].data;
-                                this._currentIteration = currentIteration;
-                                this._asynch_return_flags["currentIteration"] = true;
-                                this._makeChart();
-                            }
-                        }
-                    });
-                },
-            
                 _makeChart: function() {
+                    console.log(this._release_flow_hash);
                     this._log(this._velocities);
                     if ( this._finished_all_asynchronous_calls() ) {
                         if (this._iterations.length == 0) {
@@ -286,7 +299,9 @@
                                     },
                                     yAxis: [
                                         {
-                                            title: {text:""},
+                                            title: {
+                                                text: ""
+                                            },
                                             min: 0
                                         }
                                     ]
@@ -308,15 +323,19 @@
                         CumulativeActualVelocity: []
                     }
             
-                    var currentIteration = this._currentIteration;
-                    var currentIterationEndDate = this._currentIteration.EndDate;
+                    var current_iteration = this._current_iteration;
+                    var current_iterationDate;
+            
+                    if (current_iteration) {
+                        current_iterationEndDate = this._current_iteration.EndDate;
+                    }
             
                     var planned_velocity_adder = 0;
                     var actual_velocity_adder = 0;
             
                     Ext.Array.each(this._iterations, function(iteration) {
                         
-                        var thisEndDate = iteration.get('EndDate');
+                        var this_end_date = iteration.get('EndDate');
             
                         var planned_velocity = iteration.get('PlannedVelocity') || 0;
                         planned_velocity_adder += planned_velocity;
@@ -331,33 +350,50 @@
                         data.ActualVelocity.push(actual_velocity);
                         
                         data.CumulativePlannedVelocity.push(planned_velocity_adder);
-                        // Insert null value for Cumulative Actual Velocity for sprints that have not yet occurred
-                        if (thisEndDate > currentIterationEndDate) {
+                        // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
+                        if (current_iterationDate && this_end_date > current_iterationEndDate) {
                             actual_velocity_adder = null;
-                        }            
+                        }
                         data.CumulativeActualVelocity.push(actual_velocity_adder);
                         data.TotalBacklog.push(backlog);
-                        
+            
+                        console.log("data as pushed:");
+                        me._doubleLineLog("name", iteration.get('Name'));
+                        me._doubleLineLog("this_end_date", this_end_date);            
+                        me._doubleLineLog("planned_velocity", planned_velocity);
+                        me._doubleLineLog("actual_velocity", actual_velocity);
+                        me._doubleLineLog("backlog", backlog);
+            
                     });
             
                     return data;
                 },
             
-                _getBacklogOnEndOfIteration:function(iteration){
+                _getBacklogOnEndOfIteration: function(iteration) {
                     var backlog = null;
                     var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate')).replace(/T.*$/,"");
+                    console.log("iteration_end:");
+                    console.log(iteration_end);        
                     if (this._release_flow_hash[iteration_end]) {
                         backlog = this._release_flow_hash[iteration_end];
+                        console.log("backlog:");
+                        console.log(backlog);
                     }
                     return backlog;
                 },
             
                 _log: function(msg) {
                     window.console && console.log(msg);
+                },
+            
+                _doubleLineLog: function(msg, variable) {
+                    console.log(msg);
+                    console.log(variable);
                 }
+            
             });
             Rally.launchApp('CustomApp', {
-                name: 'LPC'
+                name: 'MyLPC'
             });
         });
     </script>

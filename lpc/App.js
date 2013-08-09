@@ -1,9 +1,10 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    _debug: true,
     _release: null,
     _iterations: [],
-    _currentIteration: null,
+    _current_iteration: null,
     _release_flow_hash: {},
     _asynch_return_flags: {},
     _velocities: {}, 
@@ -29,7 +30,7 @@ Ext.define('CustomApp', {
             xtype:'rallyreleasecombobox',
             listeners: {
                 scope: this,
-                change: function(rb, new_value,old_value){
+                change: function(rb, new_value, old_value) {
                     this._asynch_return_flags = {};
                     this._release = rb.getRecord();
                     this._findIterationsBetweenDates();
@@ -45,17 +46,17 @@ Ext.define('CustomApp', {
     },
 
     _findCurrentIteration: function() {
-        var todayDate = new Date();
+        var today_date = new Date();
 
-        var todayISOString = Rally.util.DateTime.toIsoString(todayDate).replace(/T.*$/,"");
-        this._log('Find iterations where StartDate <= ' + todayISOString + ' and EndDate >= ' + todayISOString );
+        var today_iso_string = Rally.util.DateTime.toIsoString(today_date).replace(/T.*$/,"");
+        this._log('Find iterations where StartDate <= ' + today_iso_string + ' and EndDate >= ' + today_iso_string );
 
         var iteration_query = [
-            { property: "StartDate", operator:"<=", value: todayISOString },
-            { property: "EndDate", operator:">=", value: todayISOString }
+            { property: "StartDate", operator:"<=", value: today_iso_string },
+            { property: "EndDate", operator:">=", value: today_iso_string }
         ];
         
-        var currentIterationStore = Ext.create('Rally.data.WsapiDataStore',{
+        var current_iteration_store = Ext.create('Rally.data.WsapiDataStore',{
             model: 'Iteration',
             autoLoad: true,
             filters: iteration_query,
@@ -65,9 +66,9 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     // This will be not be correct if we have overlapping iterations for some reason
-                    currentIteration = records[0].data;
-                    this._currentIteration = currentIteration;
-                    this._asynch_return_flags["currentIteration"] = true;
+                    current_iteration = records[0].data;
+                    this._current_iteration = current_iteration;
+                    this._asynch_return_flags["current_iteration"] = true;
                     this._makeChart();
                 }
             }
@@ -110,10 +111,11 @@ Ext.define('CustomApp', {
 
         var iteration_query = [
             { property: "ScheduleState", operator: ">=", value: "Accepted"},
-            {property: "Release.Name", operator: "=", value:this._release.get("Name") }
+            { property: "Release.Name", operator: "=", value:this._release.get("Name") }
         ];
         
         this._velocities = {}; // key will be iteration name
+
         Ext.create('Rally.data.WsapiDataStore',{
             model:'UserStory',
             autoLoad: true,
@@ -122,7 +124,7 @@ Ext.define('CustomApp', {
             context: { projectScopeDown: false },
             listeners:{
                 scope: this,
-                load: function(store,records) {
+                load: function(store, records) {
                     Ext.Array.each(records,function(record){
                         var iteration_name = record.get('Iteration').Name;
                         if ( record.get('PlanEstimate') ) {
@@ -130,7 +132,7 @@ Ext.define('CustomApp', {
                                 me._log("clearing velocity for " + iteration_name);
                                 me._velocities[iteration_name] = 0;
                             }
-                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                         }
                     });
                     this._asynch_return_flags["story_velocity"] = true;
@@ -147,7 +149,7 @@ Ext.define('CustomApp', {
             context: { projectScopeDown: false },
             listeners:{
                 scope: this,
-                load: function(store,records) {
+                load: function(store, records) {
                     Ext.Array.each(records,function(record){
                         var iteration_name = record.get('Iteration').Name;
                         if ( record.get('PlanEstimate') ) {
@@ -155,7 +157,7 @@ Ext.define('CustomApp', {
                                 me._log("clearing velocity for " + iteration_name);
                                 me._velocities[iteration_name] = 0;
                             }
-                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'),10);
+                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                         }
                     });
                     this._asynch_return_flags["defect_velocity"] = true;
@@ -189,7 +191,12 @@ Ext.define('CustomApp', {
                         var capture_date = Rally.util.DateTime.toIsoString(
                             card.get('CreationDate')
                         ).replace(/T.*$/,"");
+
+                        me._doubleLineLog("capture_date:", capture_date);
+
                         var plan_estimate = card.get('CardEstimateTotal');
+
+                        me._doubleLineLog("plan_estimate", plan_estimate)
                         
                         if ( !me._release_flow_hash[capture_date] ) {
                             me._release_flow_hash[capture_date] = 0;
@@ -197,7 +204,7 @@ Ext.define('CustomApp', {
 
                         me._release_flow_hash[capture_date] += plan_estimate;
                     });
-                    me._log(me._release_flow_hash);
+                    me._doubleLineLog("this._release_flow_hash::", me._release_flow_hash);
                     this._asynch_return_flags["flows"] = true;
                     me._makeChart();
                 }
@@ -223,7 +230,7 @@ Ext.define('CustomApp', {
             this._log("Not yet received the defect velocity data");
             proceed = false;
         }
-        if (!this._asynch_return_flags["currentIteration"]) {
+        if (!this._asynch_return_flags["current_iteration"]) {
             this._log("Not yet received the Current Iteration");
             proceed = false;
         }
@@ -231,6 +238,8 @@ Ext.define('CustomApp', {
     },
 
     _makeChart: function() {
+
+        this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
         this._log(this._velocities);
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length == 0) {
@@ -276,7 +285,9 @@ Ext.define('CustomApp', {
                         },
                         yAxis: [
                             {
-                                title: {text:""},
+                                title: {
+                                    text: ""
+                                },
                                 min: 0
                             }
                         ]
@@ -298,15 +309,19 @@ Ext.define('CustomApp', {
             CumulativeActualVelocity: []
         }
 
-        var currentIteration = this._currentIteration;
-        var currentIterationEndDate = this._currentIteration.EndDate;
+        var current_iteration = this._current_iteration;
+        var current_iterationDate;
+
+        if (current_iteration) {
+            current_iterationEndDate = this._current_iteration.EndDate;
+        }
 
         var planned_velocity_adder = 0;
         var actual_velocity_adder = 0;
 
         Ext.Array.each(this._iterations, function(iteration) {
             
-            var thisEndDate = iteration.get('EndDate');
+            var this_end_date = iteration.get('EndDate');
 
             var planned_velocity = iteration.get('PlannedVelocity') || 0;
             planned_velocity_adder += planned_velocity;
@@ -322,27 +337,44 @@ Ext.define('CustomApp', {
             
             data.CumulativePlannedVelocity.push(planned_velocity_adder);
             // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
-            if (thisEndDate > currentIterationEndDate) {
+            if (current_iterationDate && this_end_date > current_iterationEndDate) {
                 actual_velocity_adder = null;
-            }            
+            }
             data.CumulativeActualVelocity.push(actual_velocity_adder);
             data.TotalBacklog.push(backlog);
-            
+
+            me._log("data as pushed:");
+            me._doubleLineLog("name", iteration.get('Name'));
+            me._doubleLineLog("this_end_date", this_end_date);            
+            me._doubleLineLog("planned_velocity", planned_velocity);
+            me._doubleLineLog("actual_velocity", actual_velocity);
+            me._doubleLineLog("backlog", backlog);
+
         });
 
         return data;
     },
 
-    _getBacklogOnEndOfIteration:function(iteration){
+    _getBacklogOnEndOfIteration: function(iteration) {
         var backlog = null;
         var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate')).replace(/T.*$/,"");
+        this._doubleLineLog("iteration_end", iteration_end);
         if (this._release_flow_hash[iteration_end]) {
             backlog = this._release_flow_hash[iteration_end];
+            this._doubleLineLog("backlog", backlog);
         }
         return backlog;
     },
 
     _log: function(msg) {
         window.console && console.log(msg);
+    },
+
+    _doubleLineLog: function(msg, variable) {
+        if (this._debug) {
+            console.log(msg);
+            console.log(variable);
+        }
     }
+
 });
