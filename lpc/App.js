@@ -111,13 +111,13 @@ Ext.define('CustomApp', {
         var me = this;
 
         var iteration_query = [
-            { property: "ScheduleState", operator: ">=", value: "Accepted"},
+            { property: "ScheduleState", operator: ">=", value: "Accepted" },
             { property: "Release.Name", operator: "=", value:this._release.get("Name") }
         ];
         
         this._velocities = {}; // key will be iteration name
 
-        Ext.create('Rally.data.WsapiDataStore',{
+        Ext.create('Rally.data.WsapiDataStore', {
             model:'UserStory',
             autoLoad: true,
             filters: iteration_query,
@@ -151,7 +151,7 @@ Ext.define('CustomApp', {
             listeners:{
                 scope: this,
                 load: function(store, records) {
-                    Ext.Array.each(records,function(record){
+                    Ext.Array.each(records, function(record){
                         var iteration_name = record.get('Iteration').Name;
                         if ( record.get('PlanEstimate') ) {
                             if (typeof(me._velocities[iteration_name]) == 'undefined') {
@@ -166,12 +166,86 @@ Ext.define('CustomApp', {
                 }
             }
         });
+    },
 
+    // This function finds items that were added to the backlog today and are not yet
+    // captured in ReleaseCumulativeFlow data
+    _findTodaysReleaseBacklog: function () {
+        
+        var me = this;
+        var this_release = this._release.get('ObjectID');
+
+        var today_date = new Date();
+        var today_iso_string = Rally.util.DateTime.toIsoString(today_date).replace(/T.*$/,"");
+
+        var yesterday_date = new Date();
+        yesterday_date.setDate(yesterday_date.getDate() - 1);
+        yesterday_iso_string = Rally.util.DateTime.toIsoString(yesterday_date).replace(/T.*$/,"");
+
+        yesterdays_backlog = 0 || me._release_flow_hash[yesterday_iso_string]
+
+        // Initialize today's cumulative flow data with yesterday's
+        me._release_flow_hash[today_iso_string] = yesterdays_backlog
+
+        var release_today_query = [
+            { property: "CreationDate", operator: ">=", value: today_iso_string },
+            { property: "Release.ObjectID", operator: "=", value: this_release }
+        ];
+
+        // Query for Work Products created and assigned to the Release today and add them up
+        Ext.create('Rally.data.WsapiDataStore', {
+            model:'UserStory',
+            autoLoad: true,
+            filters: release_today_query,
+            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
+            context: { projectScopeDown: false },
+            listeners:{
+                scope: this,
+                load: function(store, records) {
+                    Ext.Array.each(records, function(record){
+                        me._doubleLineLog("_findTodaysReleaseBacklog Story Record", record);
+                        var capture_date = Rally.util.DateTime.toIsoString(
+                            record.get('CreationDate')
+                        ).replace(/T.*$/,"");                          
+                        if ( record.get('PlanEstimate') ) {
+                            me._release_flow_hash[capture_date] += parseInt(record.get('PlanEstimate'), 10);
+                        }
+                    });
+                    this._asynch_return_flags["story_backlog_today"] = true;
+                    this._makeChart();
+                }
+            }
+        });
+
+        Ext.create('Rally.data.WsapiDataStore',{
+            model:'Defect',
+            autoLoad: true,
+            filters: release_today_query,
+            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
+            context: { projectScopeDown: false },
+            listeners:{
+                scope: this,
+                load: function(store, records) {
+                    Ext.Array.each(records, function(record){
+                        me._doubleLineLog("_findTodaysReleaseBacklog Story Record", record);                        
+                        var capture_date = Rally.util.DateTime.toIsoString(
+                            record.get('CreationDate')
+                        ).replace(/T.*$/,"");                        
+                        if ( record.get('PlanEstimate') ) {
+                            me._release_flow_hash[capture_date] += parseInt(record.get('PlanEstimate'), 10);
+                        }
+                    });
+                    this._asynch_return_flags["defect_backlog_today"] = true;
+                    this._makeChart();
+                }
+            }
+        });      
     },
 
     _findReleaseBacklogAtEachIteration: function() {
         var me = this;
         this._release_flow = []; // in order of sprint end
+
         var release_check = Ext.create('Rally.data.QueryFilter',{
             property:'ReleaseObjectID',
             value:this._release.get('ObjectID')
@@ -205,6 +279,7 @@ Ext.define('CustomApp', {
                     });
                     // me._doubleLineLog("this._release_flow_hash::", me._release_flow_hash);
                     this._asynch_return_flags["flows"] = true;
+                    me._findTodaysReleaseBacklog();
                     me._makeChart();
                 }
             }
@@ -232,7 +307,15 @@ Ext.define('CustomApp', {
         if (!this._asynch_return_flags["current_iteration"]) {
             this._log("Not yet received the Current Iteration");
             proceed = false;
+        }        
+        if (!this._asynch_return_flags["story_backlog_today"]) {
+            this._log("Not yet received today's story backlog");
+            proceed = false;
         }
+        if (!this._asynch_return_flags["defect_backlog_today"]) {
+            this._log("Not yet received today's defect backlog");
+            proceed = false;
+        }          
         return proceed;
     },
 
@@ -360,9 +443,10 @@ Ext.define('CustomApp', {
         var backlog = null;
         var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate')).replace(/T.*$/,"");
         // this._doubleLineLog("iteration_end", iteration_end);
+        this._doubleLineLog("release_flow_hash", this._release_flow_hash);
         if (this._release_flow_hash[iteration_end]) {
             backlog = this._release_flow_hash[iteration_end];
-            // this._doubleLineLog("backlog", backlog);
+            this._doubleLineLog("backlog", backlog);
         }
         return backlog;
     },
