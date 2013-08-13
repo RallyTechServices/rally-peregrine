@@ -170,7 +170,7 @@ Ext.define('CustomApp', {
 
     // This function finds items that were added to the backlog today and are not yet
     // captured in ReleaseCumulativeFlow data
-    _findTodaysReleaseBacklog: function () {
+    _findTodaysReleaseBacklog: function() {
         
         var me = this;
         var this_release = this._release.get('ObjectID');
@@ -203,7 +203,6 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     Ext.Array.each(records, function(record){
-                        me._doubleLineLog("_findTodaysReleaseBacklog Story Record", record);
                         var capture_date = Rally.util.DateTime.toIsoString(
                             record.get('CreationDate')
                         ).replace(/T.*$/,"");                          
@@ -227,7 +226,6 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     Ext.Array.each(records, function(record){
-                        me._doubleLineLog("_findTodaysReleaseBacklog Story Record", record);                        
                         var capture_date = Rally.util.DateTime.toIsoString(
                             record.get('CreationDate')
                         ).replace(/T.*$/,"");                        
@@ -443,10 +441,10 @@ Ext.define('CustomApp', {
         var backlog = null;
         var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate')).replace(/T.*$/,"");
         // this._doubleLineLog("iteration_end", iteration_end);
-        this._doubleLineLog("release_flow_hash", this._release_flow_hash);
+        // this._doubleLineLog("release_flow_hash", this._release_flow_hash);
         if (this._release_flow_hash[iteration_end]) {
             backlog = this._release_flow_hash[iteration_end];
-            this._doubleLineLog("backlog", backlog);
+            // this._doubleLineLog("backlog", backlog);
         }
         return backlog;
     },
