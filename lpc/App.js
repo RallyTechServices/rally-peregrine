@@ -1,7 +1,7 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    _debug: false,
+    _debug: true,
     _release: null,
     _iterations: [],
     _current_iteration: null,
@@ -9,6 +9,7 @@ Ext.define('CustomApp', {
     _asynch_return_flags: {},
     _velocities: {},
     _trend_data: {},
+    _really_big_number: 1000000,
     defaults: { padding: 10 },
     items: [
         {
@@ -74,7 +75,7 @@ Ext.define('CustomApp', {
                 }
             }
         });
-    },    
+    },
 
     _findIterationsBetweenDates: function(  ) {
         if ( this._chart ) { this._chart.destroy(); }
@@ -183,65 +184,71 @@ Ext.define('CustomApp', {
         var this_release = this._release.get('ObjectID');
         var this_iteration = this._current_iteration;
 
-        var this_iteration_end_date = this_iteration.get('EndDate');
-        var this_iteration_end_iso_string = Rally.util.DateTime.toIsoString(this_iteration_end_date, true).replace(/T.*$/,"");
+        if (!this_iteration) {
+            this._asynch_return_flags["story_backlog_today"] = true;
+            this._asynch_return_flags["defect_backlog_today"] = true;
+        } else {
+            var this_iteration_end_date = this_iteration.get('EndDate');
+            var this_iteration_end_iso_string = Rally.util.DateTime.toIsoString(this_iteration_end_date, true).replace(/T.*$/,"");
 
-        // Initialize today's cumulative flow data with yesterday's
-        me._release_flow_hash[this_iteration_end_iso_string] = 0;
+            // Initialize today's cumulative flow data with yesterday's
+            me._release_flow_hash[this_iteration_end_iso_string] = 0;
 
-        var release_today_query = [
-            { property: "Release.ObjectID", operator: "=", value: this_release }
-        ];
+            var release_today_query = [
+                { property: "Release.ObjectID", operator: "=", value: this_release }
+            ];
 
-        // Query for Work Products created and assigned to the Release today and 
-        // add them on to the cumulative flow that is current through yesterday midnight
-        Ext.create('Rally.data.WsapiDataStore', {
-            model:'UserStory',
-            autoLoad: true,
-            filters: release_today_query,
-            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
-            context: { projectScopeDown: false },
-            listeners:{
-                scope: this,
-                load: function(store, records) {
-                    Ext.Array.each(records, function(record){                        
-                        if ( record.get('PlanEstimate') ) {
-                            me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
-                        }
-                    });
-                    this._asynch_return_flags["story_backlog_today"] = true;
-                    this._makeChart();
+            // Do a non-flow query for Work Products assigned to the Release 
+            // include them on the backlog line
+            Ext.create('Rally.data.WsapiDataStore', {
+                model:'UserStory',
+                autoLoad: true,
+                filters: release_today_query,
+                fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
+                context: { projectScopeDown: false },
+                listeners:{
+                    scope: this,
+                    load: function(store, records) {
+                        Ext.Array.each(records, function(record) {
+                            if ( record.get('PlanEstimate') ) {
+                                me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                            }
+                        });
+                        this._asynch_return_flags["story_backlog_today"] = true;
+                        this._makeChart();
+                    }
                 }
-            }
-        });
+            });
 
-        Ext.create('Rally.data.WsapiDataStore',{
-            model:'Defect',
-            autoLoad: true,
-            filters: release_today_query,
-            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
-            context: { projectScopeDown: false },
-            listeners:{
-                scope: this,
-                load: function(store, records) {
-                    Ext.Array.each(records, function(record){                     
-                        if ( record.get('PlanEstimate') ) {
-                            me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
-                        }
-                    });
-                    this._asynch_return_flags["defect_backlog_today"] = true;
-                    this._makeChart();
+            Ext.create('Rally.data.WsapiDataStore',{
+                model:'Defect',
+                autoLoad: true,
+                filters: release_today_query,
+                fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
+                context: { projectScopeDown: false },
+                listeners:{
+                    scope: this,
+                    load: function(store, records) {
+                        Ext.Array.each(records, function(record) {
+                            if ( record.get('PlanEstimate') ) {
+                                me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                            }
+                        });
+                        this._asynch_return_flags["defect_backlog_today"] = true;
+                        this._makeChart();
+                    }
                 }
-            }
-        });      
+            });
+        }
     },
 
     // Adjusts for Rally "zero'ing" the card creation time for cumulative flow cards
+    // Example:
     // Actual card creation time: 2013-08-11T23:59:59
     // WSAPI-Reported card creation time: 2013-08-11T00:00:00
     // Adjusted card creation time: 2013-08-11T23:59:59
     _adjustCardTime: function(card_date) {
-        var adjusted_date = Rally.util.DateTime.add(card_date, "hour", 23);        
+        var adjusted_date = Rally.util.DateTime.add(card_date, "hour", 23);
         adjusted_date = Rally.util.DateTime.add(adjusted_date, "minute", 59);
         adjusted_date = Rally.util.DateTime.add(adjusted_date, "second", 59);
         return adjusted_date;
@@ -291,6 +298,107 @@ Ext.define('CustomApp', {
         });
     },
 
+    _assembleSprintData: function(){
+        var me = this;
+
+        var data = {
+            Name: [],
+            IterationEndDate: [],
+            TotalBacklog: [],
+            PlannedVelocity: [],
+            ActualVelocity: [],
+            CumulativePlannedVelocity: [],
+            CumulativeActualVelocity: [],
+            OptimisticProjectedVelocity: [],
+            PessimisticProjectedVelocity: [],
+            BestHistoricalActualVelocity: 0
+        };
+
+        var current_iteration = this._current_iteration;
+        var current_iteration_end_date;
+
+        if (current_iteration) {
+            current_iteration_end_date = this._current_iteration.get('EndDate');
+        }
+
+        var planned_velocity_adder = 0;
+        var actual_velocity_adder = 0;
+        var best_historical_actual_velocity = 0;
+        var worst_historical_actual_velocity = this._really_big_number;
+
+        Ext.Array.each(this._iterations, function(iteration) {
+            
+            var this_end_date = iteration.get('EndDate');
+            data.IterationEndDate.push(this_end_date);
+
+            var planned_velocity = iteration.get('PlannedVelocity') || 0;
+            planned_velocity_adder += planned_velocity;
+            
+            var backlog = me._getBacklogOnEndOfIteration(iteration);
+            
+            var actual_velocity = me._velocities[iteration.get('Name')] || 0;
+            actual_velocity_adder += actual_velocity;
+            if (actual_velocity && actual_velocity > 0) {
+                if (actual_velocity > best_historical_actual_velocity) {
+                    best_historical_actual_velocity = actual_velocity;
+                }
+
+                if (actual_velocity < worst_historical_actual_velocity) {
+                    worst_historical_actual_velocity = actual_velocity;
+                }
+            }
+            
+            data.Name.push(iteration.get('Name'));
+            data.PlannedVelocity.push(planned_velocity);
+            data.ActualVelocity.push(actual_velocity);
+            
+            data.CumulativePlannedVelocity.push(planned_velocity_adder);
+            // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
+            if (this_end_date > current_iteration_end_date) {
+                actual_velocity_adder = null;
+            }
+            data.CumulativeActualVelocity.push(actual_velocity_adder);
+            data.TotalBacklog.push(backlog);
+
+            /* --
+                me._log("data as pushed:");
+                me._doubleLineLog("name", iteration.get('Name'));
+                me._doubleLineLog("this_end_date", this_end_date);            
+                me._doubleLineLog("planned_velocity", planned_velocity);
+                me._doubleLineLog("actual_velocity", actual_velocity);
+                me._doubleLineLog("backlog", backlog);
+            -- */
+
+        });
+        
+        // Now add in Optimistic/Pessimistic projected velocity data
+        var optimistic_velocity_adder = 0;
+        var pessimistic_velocity_adder = 0;
+
+        if (worst_historical_actual_velocity === this._really_big_number) { worst_historical_actual_velocity = 0;}
+
+        Ext.Array.each(this._iterations, function(iteration) {            
+            pessimistic_velocity_adder += worst_historical_actual_velocity;
+            optimistic_velocity_adder += best_historical_actual_velocity;
+            data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);            
+            data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
+        });
+
+        return data;
+    },
+
+    _getBacklogOnEndOfIteration: function(iteration) {
+        var backlog = null;
+        var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate'), true).replace(/T.*$/,"");
+        // this._doubleLineLog("iteration_end", iteration_end);
+        // this._doubleLineLog("release_flow_hash", this._release_flow_hash);
+        if (this._release_flow_hash[iteration_end]) {
+            backlog = this._release_flow_hash[iteration_end];
+            // this._doubleLineLog("backlog", backlog);
+        }
+        return backlog;
+    },
+
     // Function to find best historical sprint velocity for use in forecasting
     _findBestHistoricalActualVelocity: function() {
 
@@ -317,7 +425,7 @@ Ext.define('CustomApp', {
         if (!this._asynch_return_flags["current_iteration"]) {
             this._log("Not yet received the Current Iteration");
             proceed = false;
-        }        
+        }
         if (!this._asynch_return_flags["story_backlog_today"]) {
             this._log("Not yet received today's story backlog");
             proceed = false;
@@ -325,7 +433,7 @@ Ext.define('CustomApp', {
         if (!this._asynch_return_flags["defect_backlog_today"]) {
             this._log("Not yet received today's defect backlog");
             proceed = false;
-        }          
+        }
         return proceed;
     },
 
@@ -334,7 +442,7 @@ Ext.define('CustomApp', {
         // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
         // this._doubleLineLog("this._velocities", this._velocities);
         if ( this._finished_all_asynchronous_calls() ) {
-            if (this._iterations.length == 0) {
+            if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
                     xtype: 'container',
                     html: 'No iterations defined in the release bounds...'
@@ -363,9 +471,21 @@ Ext.define('CustomApp', {
                             {
                                 type: 'line',
                                 data: chart_hash.CumulativeActualVelocity,
-                                name: 'Actual Velocity', 
+                                name: 'Actual Velocity',
                                 visible: true
-                            }
+                            },
+                            {
+                                type: 'line',
+                                data: chart_hash.OptimisticProjectedVelocity,
+                                name: 'Optimistic Projected Velocity',
+                                visible: true
+                            },
+                            {
+                                type: 'line',
+                                data: chart_hash.PessimisticProjectedVelocity,
+                                name: 'Pessimistic Projected Velocity',
+                                visible: true
+                            }                                           
                         ]
                     },
                     height: 350,
@@ -389,90 +509,8 @@ Ext.define('CustomApp', {
         }
     },
 
-    _assembleSprintData: function(){
-        var me = this;
-
-        var data = {
-            Name: [],
-            TotalBacklog: [],
-            PlannedVelocity: [],
-            ActualVelocity: [],
-            CumulativePlannedVelocity: [],
-            CumulativeActualVelocity: [],
-            BestHistoricalActualVelocity: 0
-        };
-
-        var current_iteration = this._current_iteration;
-        var current_iteration_end_date;
-
-        if (current_iteration) {
-            current_iteration_end_date = this._current_iteration.get('EndDate');
-        }
-
-        var planned_velocity_adder = 0;
-        var actual_velocity_adder = 0;
-        var best_historical_actual_velocity = 0;
-
-        Ext.Array.each(this._iterations, function(iteration) {
-            
-            var this_end_date = iteration.get('EndDate');
-
-            var planned_velocity = iteration.get('PlannedVelocity') || 0;
-            planned_velocity_adder += planned_velocity;
-            
-            var backlog = me._getBacklogOnEndOfIteration(iteration);
-            
-            var actual_velocity = me._velocities[iteration.get('Name')] || 0;
-            actual_velocity_adder += actual_velocity;
-
-            if (actual_velocity > best_historical_actual_velocity) {
-                best_historical_actual_velocity = actual_velocity;
-            }
-            
-            data.Name.push(iteration.get('Name'));
-            data.PlannedVelocity.push(planned_velocity);
-            data.ActualVelocity.push(actual_velocity);
-            
-            data.CumulativePlannedVelocity.push(planned_velocity_adder);
-            // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
-            if (this_end_date > current_iteration_end_date) {
-                actual_velocity_adder = null;
-            }
-            data.CumulativeActualVelocity.push(actual_velocity_adder);
-            data.TotalBacklog.push(backlog);
-
-            /* --
-                me._log("data as pushed:");
-                me._doubleLineLog("name", iteration.get('Name'));
-                me._doubleLineLog("this_end_date", this_end_date);            
-                me._doubleLineLog("planned_velocity", planned_velocity);
-                me._doubleLineLog("actual_velocity", actual_velocity);
-                me._doubleLineLog("backlog", backlog);
-            -- */
-
-        });
-
-        data.BestHistoricalActualVelocity = best_historical_actual_velocity;
-
-        return data;
-    },
-
-    _getBacklogOnEndOfIteration: function(iteration) {
-        var backlog = null;
-        var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate'), true).replace(/T.*$/,"");
-        // this._doubleLineLog("iteration_end", iteration_end);
-        // this._doubleLineLog("release_flow_hash", this._release_flow_hash);
-        if (this._release_flow_hash[iteration_end]) {
-            backlog = this._release_flow_hash[iteration_end];
-            // this._doubleLineLog("backlog", backlog);
-        }
-        return backlog;
-    },
-
     _log: function(msg) {
-        if (this._debug) {
-            window.console && console.log(msg);
-        }
+        window.console && console.log(msg);
     },
 
     _doubleLineLog: function(msg, variable) {
