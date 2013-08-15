@@ -1,6 +1,8 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    _release_combo_box: null,
+    _target_backlog_number_box: null,
     _debug: true,
     _release: null,
     _iterations: [],
@@ -9,12 +11,21 @@ Ext.define('CustomApp', {
     _asynch_return_flags: {},
     _velocities: {},
     _trend_data: {},
+    _target_backlog: 0,
     _really_big_number: 1000000,
     defaults: { padding: 10 },
     items: [
         {
-            xtype: 'container', 
+            xtype: 'container',
             itemId: 'release_selector_box'
+        },
+        {
+            xtype: 'container',
+            itemId: 'target_backlog_number_box',
+            layout: { type: 'hbox' },
+            defaults: {
+                padding: 5
+            }
         },
         {
             xtype: 'container',
@@ -24,24 +35,51 @@ Ext.define('CustomApp', {
 
     launch: function() {
         this._addReleaseSelector();
+        this._addTargetBacklogBox();
+    },
+
+    // Clears the asynch return flags and kicks off the data collection/charting process chain
+    _kickOff: function() {
+        this._asynch_return_flags = {};
+        this._release = this._release_combo_box.getRecord();
+        this._findIterationsBetweenDates();
     },
 
     _addReleaseSelector: function() {
         this._iterations = [];
-        this.down('#release_selector_box').add({
+        this._release_combo_box = Ext.create('Rally.ui.combobox.ReleaseComboBox', {
             xtype:'rallyreleasecombobox',
             listeners: {
                 scope: this,
                 change: function(rb, new_value, old_value) {
-                    this._asynch_return_flags = {};
-                    this._release = rb.getRecord();
-                    this._findIterationsBetweenDates();
+                    this._kickOff();
                 },
                 ready: function(rb) {
-                    this._asynch_return_flags = {};
-                    this._release = rb.getRecord();
-                    this._findIterationsBetweenDates();
+                    this._kickOff();
                 }
+            }
+        });
+        this.down('#release_selector_box').add(this._release_combo_box);
+    },
+
+    _addTargetBacklogBox: function() {
+
+        var me = this;
+
+        me._target_backlog_number_box = Ext.create('Rally.ui.NumberField', {
+            xtype: 'rallynumberfield',
+            fieldLabel: 'Target Backlog (Story Points)',
+            value: 0.0,
+        });
+
+        this.down('#target_backlog_number_box').add(me._target_backlog_number_box);
+        this.down('#target_backlog_number_box').add({
+            xtype: 'rallybutton',
+            text: 'Refresh',
+            handler: function() {
+                // Update target backlog from dialog
+                me._target_backlog = me._target_backlog_number_box.getValue();
+                me._kickOff();
             }
         });
     },
@@ -305,6 +343,7 @@ Ext.define('CustomApp', {
             Name: [],
             IterationEndDate: [],
             TotalBacklog: [],
+            TargetBacklog: [],
             PlannedVelocity: [],
             ActualVelocity: [],
             CumulativePlannedVelocity: [],
@@ -326,6 +365,8 @@ Ext.define('CustomApp', {
         var best_historical_actual_velocity = 0;
         var worst_historical_actual_velocity = this._really_big_number;
 
+        // Assemble Actual and Planned velocity data
+        // Assemble backlog data
         Ext.Array.each(this._iterations, function(iteration) {
             
             var this_end_date = iteration.get('EndDate');
@@ -377,11 +418,20 @@ Ext.define('CustomApp', {
 
         if (worst_historical_actual_velocity === this._really_big_number) { worst_historical_actual_velocity = 0;}
 
-        Ext.Array.each(this._iterations, function(iteration) {            
+        Ext.Array.each(this._iterations, function(iteration) {
             pessimistic_velocity_adder += worst_historical_actual_velocity;
             optimistic_velocity_adder += best_historical_actual_velocity;
-            data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);            
+            data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
             data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
+        });
+
+        // Add in the backlog target line
+        Ext.Array.each(this._iterations, function(iteration) {
+            if (me._target_backlog !== 0) {
+                data.TargetBacklog.push(me._target_backlog);
+            } else {
+                data.TargetBacklog.push(null);
+            }
         });
 
         return data;
@@ -478,14 +528,29 @@ Ext.define('CustomApp', {
                                 type: 'line',
                                 data: chart_hash.OptimisticProjectedVelocity,
                                 name: 'Optimistic Projected Velocity',
-                                visible: true
+                                visible: true,
+                                marker: {
+                                    enabled: false
+                                }
                             },
                             {
                                 type: 'line',
                                 data: chart_hash.PessimisticProjectedVelocity,
                                 name: 'Pessimistic Projected Velocity',
-                                visible: true
-                            }                                           
+                                visible: true,
+                                marker: {
+                                    enabled: false
+                                }
+                            },
+                            {
+                                type: 'line',
+                                data: chart_hash.TargetBacklog,
+                                name: 'Backlog Target',
+                                visible: true,
+                                marker: {
+                                    enabled: false
+                                }
+                            }
                         ]
                     },
                     height: 350,
