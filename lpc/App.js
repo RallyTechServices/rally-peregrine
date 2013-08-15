@@ -1,9 +1,9 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    _debug: false,
     _release_combo_box: null,
     _target_backlog_number_box: null,
-    _debug: true,
     _release: null,
     _iterations: [],
     _current_iteration: null,
