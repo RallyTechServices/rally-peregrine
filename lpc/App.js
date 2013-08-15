@@ -13,19 +13,13 @@ Ext.define('CustomApp', {
     _trend_data: {},
     _target_backlog: 0,
     _really_big_number: 1000000,
-    defaults: { padding: 10 },
+    defaults: { padding: 10, margin: 5 },
     items: [
         {
             xtype: 'container',
-            itemId: 'release_selector_box'
-        },
-        {
-            xtype: 'container',
-            itemId: 'target_backlog_number_box',
+            itemId: 'selector_box',
             layout: { type: 'hbox' },
-            defaults: {
-                padding: 5
-            }
+            defaults: { margin: 5 }
         },
         {
             xtype: 'container',
@@ -59,7 +53,7 @@ Ext.define('CustomApp', {
                 }
             }
         });
-        this.down('#release_selector_box').add(this._release_combo_box);
+        this.down('#selector_box').add(this._release_combo_box);
     },
 
     _addTargetBacklogBox: function() {
@@ -69,11 +63,11 @@ Ext.define('CustomApp', {
         me._target_backlog_number_box = Ext.create('Rally.ui.NumberField', {
             xtype: 'rallynumberfield',
             fieldLabel: 'Target Backlog (Story Points)',
-            value: 0.0,
+            value: 0.0
         });
 
-        this.down('#target_backlog_number_box').add(me._target_backlog_number_box);
-        this.down('#target_backlog_number_box').add({
+        this.down('#selector_box').add(me._target_backlog_number_box);
+        this.down('#selector_box').add({
             xtype: 'rallybutton',
             text: 'Refresh',
             handler: function() {
@@ -173,13 +167,15 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     Ext.Array.each(records,function(record){
-                        var iteration_name = record.get('Iteration').Name;
-                        if ( record.get('PlanEstimate') ) {
-                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                me._log("clearing velocity for " + iteration_name);
-                                me._velocities[iteration_name] = 0;
+                        if ( record.get('Iteration') ) {
+                            var iteration_name = record.get('Iteration').Name;
+                            if ( record.get('PlanEstimate') ) {
+                                if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                    me._log("clearing velocity for " + iteration_name);
+                                    me._velocities[iteration_name] = 0;
+                                }
+                                me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                             }
-                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                         }
                     });
                     this._asynch_return_flags["story_velocity"] = true;
@@ -198,13 +194,15 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     Ext.Array.each(records, function(record){
-                        var iteration_name = record.get('Iteration').Name;
-                        if ( record.get('PlanEstimate') ) {
-                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                me._log("clearing velocity for " + iteration_name);
-                                me._velocities[iteration_name] = 0;
+                        if ( record.get('Iteration') ) {
+                            var iteration_name = record.get('Iteration').Name;
+                            if ( record.get('PlanEstimate') ) {
+                                if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                    me._log("clearing velocity for " + iteration_name);
+                                    me._velocities[iteration_name] = 0;
+                                }
+                                me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                             }
-                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                         }
                     });
                     this._asynch_return_flags["defect_velocity"] = true;
@@ -364,6 +362,7 @@ Ext.define('CustomApp', {
         var actual_velocity_adder = 0;
         var best_historical_actual_velocity = 0;
         var worst_historical_actual_velocity = this._really_big_number;
+        var most_recent_backlog = 0;
 
         // Assemble Actual and Planned velocity data
         // Assemble backlog data
@@ -376,6 +375,9 @@ Ext.define('CustomApp', {
             planned_velocity_adder += planned_velocity;
             
             var backlog = me._getBacklogOnEndOfIteration(iteration);
+            if (backlog) { 
+                most_recent_backlog = backlog;
+            }
             
             var actual_velocity = me._velocities[iteration.get('Name')] || 0;
             actual_velocity_adder += actual_velocity;
@@ -426,6 +428,11 @@ Ext.define('CustomApp', {
         });
 
         // Add in the backlog target line
+        if (me._target_backlog === 0) {
+            console.log("MRB",most_recent_backlog);
+            me._target_backlog = most_recent_backlog;
+            me._target_backlog_number_box.setValue(most_recent_backlog);
+        }
         Ext.Array.each(this._iterations, function(iteration) {
             if (me._target_backlog !== 0) {
                 data.TargetBacklog.push(me._target_backlog);
