@@ -1,7 +1,7 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    _debug: false,
+    _debug: true,
     _release_combo_box: null,
     _target_backlog_number_box: null,
     _release: null,
@@ -122,14 +122,20 @@ Ext.define('CustomApp', {
         this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
 
         var iteration_query = [
-            { property:"StartDate", operator:">=", value:start_date_iso },
-            { property:"EndDate", operator:"<=", value:end_date_iso }
+            { property: "StartDate", operator:">=", value: start_date_iso },
+            { property: "EndDate", operator:"<=", value: end_date_iso }
         ];
         
         var iteration_store = Ext.create('Rally.data.WsapiDataStore',{
             model: 'Iteration',
             autoLoad: true,
             filters: iteration_query,
+            sorters: [
+                {
+                    property: 'EndDate',
+                    direction: 'ASC'
+                }
+            ],
             fetch: ['Name','PlannedVelocity','EndDate'],
             context: { projectScopeDown: false },
             listeners: {
@@ -514,19 +520,21 @@ Ext.define('CustomApp', {
                         categories: chart_hash.Name,
                         series: [
                             {
-                                type: 'line',
+                                type: 'column',
                                 data: chart_hash.CumulativePlannedVelocity,
                                 name: 'Planned Velocity',
                                 visible: true
                             },
+                            /* --
                             {
                                 type: 'line',
                                 data: chart_hash.TotalBacklog,
                                 name: 'Total Backlog',
                                 visible: true
                             },
+                            -- */
                             {
-                                type: 'line',
+                                type: 'column',
                                 data: chart_hash.CumulativeActualVelocity,
                                 name: 'Actual Velocity',
                                 visible: true
