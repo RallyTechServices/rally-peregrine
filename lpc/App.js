@@ -1,12 +1,13 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    _debug: false,
+    _debug: true,
     _release_combo_box: null,
     _target_backlog_number_box: null,
     _release: null,
     _iterations: [],
     _current_iteration: null,
+    _current_iteration_index: null,
     _release_flow_hash: {},
     _asynch_return_flags: {},
     _velocities: {},
@@ -79,6 +80,7 @@ Ext.define('CustomApp', {
     },
 
     _findCurrentIteration: function() {
+        var me = this;
         var today_date = new Date();
 
         var today_iso_string = Rally.util.DateTime.toIsoString(today_date, true).replace(/T.*$/,"");
@@ -99,18 +101,74 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     // This will be not be correct if we have overlapping iterations for some reason
-                    current_iteration = records[0];
-                    this._current_iteration = current_iteration;
-                    this._asynch_return_flags["current_iteration"] = true;
-                    this._findTodaysReleaseBacklog();
-                    this._makeChart();
+                    var current_iteration = records[0];
+
+                    var this_release = this._release;
+                    var this_release_date = this_release.get('ReleaseDate');
+                    var current_iteration_end_date;
+                    if (current_iteration) {
+                        current_iteration_end_date = current_iteration.get('EndDate');
+
+                        // If we're past the ReleaseDate, then pick the last iteration in the
+                        // selected Release to be the "current" iteration.
+                        if (current_iteration_end_date > this_release_date) {
+                            current_iteration = me._iterations[me._iterations.length-1];
+                        }
+                    } else {
+                        // Current iteration not found. This can happen if we're between iterations
+                        // within our current release (like on a weekend). Find the closest
+                        // iteration to "now".
+                        var today = new Date().getTime();
+                        // Times are in milliseconds - multiply big number by 1000 to make
+                        // sure we get a difference less than our "infinity"
+                        var min_time_delta = this._really_big_number*1000;
+                        var closest_iteration;
+                        Ext.Array.each(me._iterations, function(iteration) {
+                            var this_iteration_end_date = iteration.get('EndDate');
+                            time_delta = Math.abs(this_iteration_end_date.getTime() - today);
+                            if (time_delta < min_time_delta) {
+                                closest_iteration = iteration;
+                                min_time_delta = time_delta;
+                            }
+                        });
+                        current_iteration = closest_iteration;
+                        current_iteration_end_date = current_iteration.get('EndDate');
+                    }
+
+                    me._current_iteration = current_iteration;
+
+                    // Calculate array index of current_iteration
+                    var index = 0;
+                    var index_of_current = 0;
+                    Ext.Array.each(me._iterations, function(iteration) {
+                        this_iteration_end_date = iteration.get('EndDate');
+                        if (this_iteration_end_date === current_iteration_end_date) {
+                            index_of_current = index;
+                        }
+                        index++;
+                    });
+                    me._current_iteration_index = index_of_current;
+                    /* --
+                    console.log('me._current_iteration: ', me._current_iteration);
+                    console.log('me.current_iteration_index: ', me._current_iteration_index);
+                    -- */
+
+                    me._asynch_return_flags["current_iteration"] = true;
+                    me._findTodaysReleaseBacklog();
+                    me._makeChart();
                 }
             }
         });
+
     },
 
     _findIterationsBetweenDates: function(  ) {
-        if ( this._chart ) { this._chart.destroy(); }
+        
+        var me = this;
+
+        if ( this._chart ) {
+            this._chart.destroy();
+        }
 
         // Initialize release flow hash
         this._release_flow_hash = {}; // key is date (NOT date/time)
@@ -122,37 +180,44 @@ Ext.define('CustomApp', {
         this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
 
         var iteration_query = [
-            { property:"StartDate", operator:">=", value:start_date_iso },
-            { property:"EndDate", operator:"<=", value:end_date_iso }
+            { property: "StartDate", operator:">=", value: start_date_iso },
+            { property: "EndDate", operator:"<=", value: end_date_iso }
         ];
         
         var iteration_store = Ext.create('Rally.data.WsapiDataStore',{
             model: 'Iteration',
             autoLoad: true,
             filters: iteration_query,
+            sorters: [
+                {
+                    property: 'EndDate',
+                    direction: 'ASC'
+                }
+            ],
             fetch: ['Name','PlannedVelocity','EndDate'],
             context: { projectScopeDown: false },
             listeners: {
                 scope: this,
                 load: function(store, records) {
-                    this._iterations = records;
-                    this._findReleaseBacklogAtEachIteration();
-                    this._findAcceptedItemsInEachIteration();
-                    this._asynch_return_flags["iterations"] = true;
-                    this._makeChart();
+                    me._iterations = records;
+                    me._asynch_return_flags["iterations"] = true;
+                    me._findReleaseBacklogAtEachIteration();
+                    me._findAcceptedItemsInEachIteration();
+                    me._findCurrentIteration();
+                    me._makeChart();
                 }
             }
         });
-
-        this._findCurrentIteration();
     },
 
     _findAcceptedItemsInEachIteration: function() {
         var me = this;
 
+        console.log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
+
         var iteration_query = [
             { property: "ScheduleState", operator: ">=", value: "Accepted" },
-            { property: "Release.Name", operator: "=", value:this._release.get("Name") }
+            { property: "Release.Name", operator: "=", value: this._release.get("Name") }
         ];
         
         this._velocities = {}; // key will be iteration name
@@ -166,12 +231,12 @@ Ext.define('CustomApp', {
             listeners:{
                 scope: this,
                 load: function(store, records) {
-                    Ext.Array.each(records,function(record){
+                    Ext.Array.each(records, function(record) {
                         if ( record.get('Iteration') ) {
                             var iteration_name = record.get('Iteration').Name;
                             if ( record.get('PlanEstimate') ) {
                                 if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                    me._log("clearing velocity for " + iteration_name);
+                                    console.log("clearing velocity for " + iteration_name);
                                     me._velocities[iteration_name] = 0;
                                 }
                                 me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
@@ -348,11 +413,18 @@ Ext.define('CustomApp', {
             CumulativeActualVelocity: [],
             OptimisticProjectedVelocity: [],
             PessimisticProjectedVelocity: [],
+            ProjectedFinishOptimistic: [],
+            ProjectedFinishPessimistic: [],
             BestHistoricalActualVelocity: 0
         };
 
         var current_iteration = this._current_iteration;
         var current_iteration_end_date;
+
+        var current_release = this._release;
+        var release_date = current_release.get('ReleaseDate');
+
+        var today = new Date();
 
         if (current_iteration) {
             current_iteration_end_date = this._current_iteration.get('EndDate');
@@ -366,7 +438,13 @@ Ext.define('CustomApp', {
 
         // Assemble Actual and Planned velocity data
         // Assemble backlog data
-        Ext.Array.each(this._iterations, function(iteration) {
+
+        // Number of historical iterations in data set
+        var number_iterations = me._iterations.length;
+        var iteration_index = 0;
+        var current_iteration_index = me._current_iteration_index;
+
+        Ext.Array.each(me._iterations, function(iteration) {
             
             var this_end_date = iteration.get('EndDate');
             data.IterationEndDate.push(this_end_date);
@@ -375,19 +453,23 @@ Ext.define('CustomApp', {
             planned_velocity_adder += planned_velocity;
             
             var backlog = me._getBacklogOnEndOfIteration(iteration);
-            if (backlog) { 
+            if (backlog) {
                 most_recent_backlog = backlog;
             }
             
             var actual_velocity = me._velocities[iteration.get('Name')] || 0;
             actual_velocity_adder += actual_velocity;
-            if (actual_velocity && actual_velocity > 0) {
-                if (actual_velocity > best_historical_actual_velocity) {
-                    best_historical_actual_velocity = actual_velocity;
-                }
 
-                if (actual_velocity < worst_historical_actual_velocity) {
-                    worst_historical_actual_velocity = actual_velocity;
+            // Only consider data from most recent three iterations if at least three
+            // If we have less than 3 completed iterations, consider all data
+            if (current_iteration_index - iteration_index < 3 || current_iteration_index < 3) {
+                if (actual_velocity && actual_velocity > 0) {
+                    if (actual_velocity > best_historical_actual_velocity) {
+                        best_historical_actual_velocity = actual_velocity;
+                    }
+                    if (actual_velocity < worst_historical_actual_velocity) {
+                        worst_historical_actual_velocity = actual_velocity;
+                    }
                 }
             }
             
@@ -403,6 +485,8 @@ Ext.define('CustomApp', {
             data.CumulativeActualVelocity.push(actual_velocity_adder);
             data.TotalBacklog.push(backlog);
 
+            iteration_index++;
+
             /* --
                 me._log("data as pushed:");
                 me._doubleLineLog("name", iteration.get('Name'));
@@ -413,33 +497,69 @@ Ext.define('CustomApp', {
             -- */
 
         });
+
+        if (worst_historical_actual_velocity === this._really_big_number) {
+            worst_historical_actual_velocity = 0;
+        }
+
+        console.log('best_historical_actual_velocity: ', best_historical_actual_velocity);
+        console.log('worst_historical_actual_velocity: ', worst_historical_actual_velocity);
         
         // Now add in Optimistic/Pessimistic projected velocity data
         var optimistic_velocity_adder = 0;
         var pessimistic_velocity_adder = 0;
 
-        if (worst_historical_actual_velocity === this._really_big_number) { worst_historical_actual_velocity = 0;}
-
         Ext.Array.each(this._iterations, function(iteration) {
             pessimistic_velocity_adder += worst_historical_actual_velocity;
             optimistic_velocity_adder += best_historical_actual_velocity;
-            data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
-            data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
+
+            // Only show projections if we haven't released
+            if (today < release_date) {
+                data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
+                data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
+            } else {
+                data.OptimisticProjectedVelocity.push(null);
+                data.PessimisticProjectedVelocity.push(null);
+            }
         });
 
-        // Add in the backlog target line
+        // Calculate projected finish based on optimistic/pessimistic velocities
+        number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
+        number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
+
+        // Add in the backlog target line and projected finish lines
         if (me._target_backlog === 0) {
-            console.log("MRB",most_recent_backlog);
+            console.log("MRB", most_recent_backlog);
             me._target_backlog = most_recent_backlog;
             me._target_backlog_number_box.setValue(most_recent_backlog);
         }
+
+        var index = 0;
         Ext.Array.each(this._iterations, function(iteration) {
             if (me._target_backlog !== 0) {
                 data.TargetBacklog.push(me._target_backlog);
             } else {
                 data.TargetBacklog.push(null);
             }
+
+            if (index === number_sprints_pessimistic && today < release_date) {
+                data.ProjectedFinishPessimistic.push(me._target_backlog);
+            } else {
+                data.ProjectedFinishPessimistic.push(null);
+            }
+
+            if (index === number_sprints_optimistic && today < release_date) {
+                data.ProjectedFinishOptimistic.push(me._target_backlog);
+            } else {
+                data.ProjectedFinishOptimistic.push(null);
+            }
+
+            index++;
+
         });
+
+        console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+        console.log('number_sprints_optimistic: ', number_sprints_optimistic);
 
         return data;
     },
@@ -514,19 +634,21 @@ Ext.define('CustomApp', {
                         categories: chart_hash.Name,
                         series: [
                             {
-                                type: 'line',
+                                type: 'column',
                                 data: chart_hash.CumulativePlannedVelocity,
                                 name: 'Planned Velocity',
                                 visible: true
                             },
+                            /* --
                             {
                                 type: 'line',
                                 data: chart_hash.TotalBacklog,
                                 name: 'Total Backlog',
                                 visible: true
                             },
+                            -- */
                             {
-                                type: 'line',
+                                type: 'column',
                                 data: chart_hash.CumulativeActualVelocity,
                                 name: 'Actual Velocity',
                                 visible: true
@@ -557,6 +679,20 @@ Ext.define('CustomApp', {
                                 marker: {
                                     enabled: false
                                 }
+                            },
+                            {
+                                type: 'column',
+                                data: chart_hash.ProjectedFinishOptimistic,
+                                name: 'Projected Finish (Optimistic)',
+                                visible: true,
+                                pointWidth: 4
+                            },
+                            {
+                                type: 'column',
+                                data: chart_hash.ProjectedFinishPessimistic,
+                                name: 'Projected Finish (Pessimistic)',
+                                visible: true,
+                                pointWidth: 4
                             }
                         ]
                     },
@@ -567,6 +703,18 @@ Ext.define('CustomApp', {
                             text: 'LPC',
                             align: 'center'
                         },
+                        /* -- Couldn't get the following to work
+                        xAxis: {
+                            categories: chart_hash.Name,
+                            plotLines: [
+                                {
+                                    color: '#000',
+                                    width: 2,
+                                    value: this._target_backlog
+                                }
+                            ]
+                        },
+                        -- */
                         yAxis: [
                             {
                                 title: {
