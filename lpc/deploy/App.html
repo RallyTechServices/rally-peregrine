@@ -427,11 +427,18 @@
                         CumulativeActualVelocity: [],
                         OptimisticProjectedVelocity: [],
                         PessimisticProjectedVelocity: [],
+                        ProjectedFinishOptimistic: [],
+                        ProjectedFinishPessimistic: [],
                         BestHistoricalActualVelocity: 0
                     };
             
                     var current_iteration = this._current_iteration;
                     var current_iteration_end_date;
+            
+                    var current_release = this._release;
+                    var release_date = current_release.get('ReleaseDate');
+            
+                    var today = new Date();
             
                     if (current_iteration) {
                         current_iteration_end_date = this._current_iteration.get('EndDate');
@@ -519,27 +526,52 @@
                     Ext.Array.each(this._iterations, function(iteration) {
                         pessimistic_velocity_adder += worst_historical_actual_velocity;
                         optimistic_velocity_adder += best_historical_actual_velocity;
-                        data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
-                        data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
-                    });
             
-                    // Add in the backlog target line
-                    if (me._target_backlog === 0) {
-                        console.log("MRB", most_recent_backlog);
-                        me._target_backlog = most_recent_backlog;
-                        me._target_backlog_number_box.setValue(most_recent_backlog);
-                    }
-                    Ext.Array.each(this._iterations, function(iteration) {
-                        if (me._target_backlog !== 0) {
-                            data.TargetBacklog.push(me._target_backlog);
+                        // Only show projections if we haven't released
+                        if (today < release_date) {
+                            data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
+                            data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
                         } else {
-                            data.TargetBacklog.push(null);
+                            data.OptimisticProjectedVelocity.push(null);
+                            data.PessimisticProjectedVelocity.push(null);
                         }
                     });
             
                     // Calculate projected finish based on optimistic/pessimistic velocities
                     number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
                     number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
+            
+                    // Add in the backlog target line and projected finish lines
+                    if (me._target_backlog === 0) {
+                        console.log("MRB", most_recent_backlog);
+                        me._target_backlog = most_recent_backlog;
+                        me._target_backlog_number_box.setValue(most_recent_backlog);
+                    }
+            
+                    var index = 0;
+                    Ext.Array.each(this._iterations, function(iteration) {
+                        if (me._target_backlog !== 0) {
+                            data.TargetBacklog.push(me._target_backlog);
+                        } else {
+                            data.TargetBacklog.push(null);
+                        }
+            
+                        if (index === number_sprints_pessimistic && today < release_date) {
+                            data.ProjectedFinishPessimistic.push(me._target_backlog);
+                        } else {
+                            data.ProjectedFinishPessimistic.push(null);
+                        }
+            
+                        if (index === number_sprints_optimistic && today < release_date) {
+                            data.ProjectedFinishOptimistic.push(me._target_backlog);
+                        } else {
+                            data.ProjectedFinishOptimistic.push(null);
+                        }
+            
+                        index++;
+            
+                    });
+            
                     console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
                     console.log('number_sprints_optimistic: ', number_sprints_optimistic);
             
@@ -661,6 +693,20 @@
                                             marker: {
                                                 enabled: false
                                             }
+                                        },
+                                        {
+                                            type: 'column',
+                                            data: chart_hash.ProjectedFinishOptimistic,
+                                            name: 'Projected Finish (Optimistic)',
+                                            visible: true,
+                                            pointWidth: 4
+                                        },
+                                        {
+                                            type: 'column',
+                                            data: chart_hash.ProjectedFinishPessimistic,
+                                            name: 'Projected Finish (Pessimistic)',
+                                            visible: true,
+                                            pointWidth: 4
                                         }
                                     ]
                                 },
@@ -671,6 +717,18 @@
                                         text: 'LPC',
                                         align: 'center'
                                     },
+                                    /* -- Couldn't get the following to work
+                                    xAxis: {
+                                        categories: chart_hash.Name,
+                                        plotLines: [
+                                            {
+                                                color: '#000',
+                                                width: 2,
+                                                value: this._target_backlog
+                                            }
+                                        ]
+                                    },
+                                    -- */
                                     yAxis: [
                                         {
                                             title: {
