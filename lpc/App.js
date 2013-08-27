@@ -58,7 +58,6 @@ Ext.define('CustomApp', {
     },
 
     _addTargetBacklogBox: function() {
-
         var me = this;
 
         me._target_backlog_number_box = Ext.create('Rally.ui.NumberField', {
@@ -125,7 +124,7 @@ Ext.define('CustomApp', {
                         var closest_iteration;
                         Ext.Array.each(me._iterations, function(iteration) {
                             var this_iteration_end_date = iteration.get('EndDate');
-                            time_delta = Math.abs(this_iteration_end_date.getTime() - today);
+                            var time_delta = Math.abs(this_iteration_end_date.getTime() - today);
                             if (time_delta < min_time_delta) {
                                 closest_iteration = iteration;
                                 min_time_delta = time_delta;
@@ -141,7 +140,7 @@ Ext.define('CustomApp', {
                     var index = 0;
                     var index_of_current = 0;
                     Ext.Array.each(me._iterations, function(iteration) {
-                        this_iteration_end_date = iteration.get('EndDate');
+                        var this_iteration_end_date = iteration.get('EndDate');
                         if (this_iteration_end_date === current_iteration_end_date) {
                             index_of_current = index;
                         }
@@ -415,6 +414,8 @@ Ext.define('CustomApp', {
             PessimisticProjectedVelocity: [],
             ProjectedFinishOptimistic: [],
             ProjectedFinishPessimistic: [],
+            ProjectedFinishOptimisticIndex: -1,
+            ProjectedFinishPessimisticIndex: -1,
             BestHistoricalActualVelocity: 0
         };
 
@@ -524,9 +525,11 @@ Ext.define('CustomApp', {
         });
 
         // Calculate projected finish based on optimistic/pessimistic velocities
-        number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
-        number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
+        var number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
+        var number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
 
+        data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
+        data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
         // Add in the backlog target line and projected finish lines
         if (me._target_backlog === 0) {
             console.log("MRB", most_recent_backlog);
@@ -632,6 +635,7 @@ Ext.define('CustomApp', {
                     xtype: 'rallychart',
                     chartData: {
                         categories: chart_hash.Name,
+                        
                         series: [
                             {
                                 type: 'column',
@@ -675,7 +679,7 @@ Ext.define('CustomApp', {
                                 type: 'line',
                                 data: chart_hash.TargetBacklog,
                                 name: 'Backlog Target',
-                                visible: true,
+                                visible: false,
                                 marker: {
                                     enabled: false
                                 }
@@ -715,14 +719,29 @@ Ext.define('CustomApp', {
                             ]
                         },
                         -- */
-                        yAxis: [
+                        yAxis: [{
+                            plotLines: [
                             {
-                                title: {
-                                    text: ""
-                                },
-                                min: 0
+                                color: '#000',
+                                width: 2,
+                                value: this._target_backlog
+                            }]
+                        }],
+                        xAxis: [{
+                            categories: chart_hash.Name,
+                            plotLines: [
+                            {
+                                color: '#a00',
+                                width: 2,
+                                value: chart_hash.ProjectedFinishPessimisticIndex
+                            },
+                            {
+                                color: '#0a0',
+                                width: 2,
+                                value: chart_hash.ProjectedFinishOptimisticIndex
                             }
-                        ]
+                            ]
+                        }]
                     }
                 });
             }
