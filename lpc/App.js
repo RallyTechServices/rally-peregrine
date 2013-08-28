@@ -200,7 +200,7 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     me._iterations = records;
-                    console.log('me._iterations: ', me._iterations);
+                    me._log('me._iterations: ', me._iterations);
                     if (me._iterations.length > 0) {
                         me._asynch_return_flags["iterations"] = true;
                         me._findReleaseBacklogAtEachIteration();
@@ -218,7 +218,7 @@ Ext.define('CustomApp', {
     _findAcceptedItemsInEachIteration: function() {
         var me = this;
 
-        console.log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
+        me._log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
 
         var iteration_query = [
             { property: "ScheduleState", operator: ">=", value: "Accepted" },
@@ -241,7 +241,7 @@ Ext.define('CustomApp', {
                             var iteration_name = record.get('Iteration').Name;
                             if ( record.get('PlanEstimate') ) {
                                 if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                    console.log("clearing velocity for " + iteration_name);
+                                    me._log("clearing velocity for " + iteration_name);
                                     me._velocities[iteration_name] = 0;
                                 }
                                 me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
@@ -527,7 +527,7 @@ Ext.define('CustomApp', {
 
         // Add in the backlog target line and projected finish lines
         if (me._target_backlog === 0) {
-            console.log("MRB", data.MostRecentBacklog);
+            me._log("MRB", data.MostRecentBacklog);
             me._target_backlog = data.MostRecentBacklog;
             me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
@@ -536,8 +536,8 @@ Ext.define('CustomApp', {
         var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
         var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
 
-        console.log('number_sprints_optimistic: ', number_sprints_optimistic);
-        console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+        me._log('number_sprints_optimistic: ', number_sprints_optimistic);
+        me._log('number_sprints_pessimistic: ', number_sprints_pessimistic);
 
         data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
         data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
@@ -545,12 +545,12 @@ Ext.define('CustomApp', {
         // If projections extend past our Release date, we need to
         // "pad" the data with fake iterations to plot projection
         var number_iterations_in_release = this._iterations.length;
-        console.log('number_iterations_in_release: ', number_iterations_in_release);
+        me._log('number_iterations_in_release: ', number_iterations_in_release);
 
         if (number_sprints_pessimistic >= number_iterations_in_release) {
 
             var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
-            console.log("extra_sprints: ", extra_sprints);
+            me._log("extra_sprints: ", extra_sprints);
 
             var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
             var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
