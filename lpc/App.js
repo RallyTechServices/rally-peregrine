@@ -545,9 +545,12 @@ Ext.define('CustomApp', {
         // If projections extend past our Release date, we need to
         // "pad" the data with fake iterations to plot projection
         var number_iterations_in_release = this._iterations.length;
-        if (number_sprints_pessimistic > number_iterations_in_release) {
+        console.log('number_iterations_in_release: ', number_iterations_in_release);
+
+        if (number_sprints_pessimistic >= number_iterations_in_release) {
 
             var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
+            console.log("extra_sprints: ", extra_sprints);
 
             var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
             var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
@@ -761,6 +764,7 @@ Ext.define('CustomApp', {
 
     _noIterationsNotify: function() {
         this._chart = this.down('#chart_box').add({
+            xtype: 'container',
             html: "No Iterations Defined for Release at this Scoping."
         });
     },
