@@ -3,7 +3,7 @@
 <head>
     <title>MyLPC</title>
 
-    <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
+    <script type="text/javascript" src="https://rally1.rallydev.com/apps/2.0rc1/sdk-debug.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function() {
@@ -27,7 +27,8 @@
                 _velocities: {},
                 _trend_data: {},
                 _target_backlog: 0,
-                _really_big_number: 1000000,
+                _really_big_number: 1000000000000,
+                _chart_data: null,
                 defaults: { padding: 10, margin: 5 },
                 items: [
                     {
@@ -132,9 +133,9 @@
                                     // within our current release (like on a weekend). Find the closest
                                     // iteration to "now".
                                     var today = new Date().getTime();
-                                    // Times are in milliseconds - multiply big number by 1000 to make
+                                    // Times are in milliseconds - use our really big number to make
                                     // sure we get a difference less than our "infinity"
-                                    var min_time_delta = this._really_big_number*1000;
+                                    var min_time_delta = this._really_big_number;
                                     var closest_iteration;
                                     Ext.Array.each(me._iterations, function(iteration) {
                                         var this_iteration_end_date = iteration.get('EndDate');
@@ -213,11 +214,16 @@
                             scope: this,
                             load: function(store, records) {
                                 me._iterations = records;
-                                me._asynch_return_flags["iterations"] = true;
-                                me._findReleaseBacklogAtEachIteration();
-                                me._findAcceptedItemsInEachIteration();
-                                me._findCurrentIteration();
-                                me._makeChart();
+                                console.log('me._iterations: ', me._iterations);
+                                if (me._iterations.length > 0) {
+                                    me._asynch_return_flags["iterations"] = true;
+                                    me._findReleaseBacklogAtEachIteration();
+                                    me._findAcceptedItemsInEachIteration();
+                                    me._findCurrentIteration();
+                                    me._makeChart();
+                                } else {
+                                    me._noIterationsNotify();
+                                }
                             }
                         }
                     });
@@ -414,7 +420,6 @@
             
                 _assembleSprintData: function(){
                     var me = this;
-            
                     var data = {
                         Name: [],
                         IterationEndDate: [],
@@ -426,13 +431,14 @@
                         CumulativeActualVelocity: [],
                         OptimisticProjectedVelocity: [],
                         PessimisticProjectedVelocity: [],
-                        ProjectedFinishOptimistic: [],
-                        ProjectedFinishPessimistic: [],
                         ProjectedFinishOptimisticIndex: -1,
                         ProjectedFinishPessimisticIndex: -1,
-                        BestHistoricalActualVelocity: 0
+                        MostRecentBacklog: 0,
+                        BestHistoricalActualVelocity: 0,
+                        WorstHistoricalActualVelocity: 0
                     };
             
+                    // Get timebox info
                     var current_iteration = this._current_iteration;
                     var current_iteration_end_date;
             
@@ -464,13 +470,14 @@
                         var this_end_date = iteration.get('EndDate');
                         data.IterationEndDate.push(this_end_date);
             
-                        var planned_velocity = iteration.get('PlannedVelocity') || 0;
-                        planned_velocity_adder += planned_velocity;
-                        
                         var backlog = me._getBacklogOnEndOfIteration(iteration);
                         if (backlog) {
                             most_recent_backlog = backlog;
                         }
+                        data.TotalBacklog.push(backlog);
+            
+                        var planned_velocity = iteration.get('PlannedVelocity') || 0;
+                        planned_velocity_adder += planned_velocity;
                         
                         var actual_velocity = me._velocities[iteration.get('Name')] || 0;
                         actual_velocity_adder += actual_velocity;
@@ -498,18 +505,8 @@
                             actual_velocity_adder = null;
                         }
                         data.CumulativeActualVelocity.push(actual_velocity_adder);
-                        data.TotalBacklog.push(backlog);
             
                         iteration_index++;
-            
-                        /* --
-                            me._log("data as pushed:");
-                            me._doubleLineLog("name", iteration.get('Name'));
-                            me._doubleLineLog("this_end_date", this_end_date);            
-                            me._doubleLineLog("planned_velocity", planned_velocity);
-                            me._doubleLineLog("actual_velocity", actual_velocity);
-                            me._doubleLineLog("backlog", backlog);
-                        -- */
             
                     });
             
@@ -517,16 +514,83 @@
                         worst_historical_actual_velocity = 0;
                     }
             
-                    console.log('best_historical_actual_velocity: ', best_historical_actual_velocity);
-                    console.log('worst_historical_actual_velocity: ', worst_historical_actual_velocity);
-                    
+                    data.MostRecentBacklog = most_recent_backlog;
+                    data.BestHistoricalActualVelocity = best_historical_actual_velocity;
+                    data.WorstHistoricalActualVelocity = worst_historical_actual_velocity;
+            
+                    me._chart_data = data;
+                },
+            
+                _assembleProjectedData: function() {
+            
+                    var me = this;
+                    var data = this._chart_data;
+            
+                    // Get timebox info
+                    var current_iteration = this._current_iteration;
+                    var current_iteration_end_date;
+            
+                    var current_release = this._release;
+                    var release_date = current_release.get('ReleaseDate');
+            
+                    var today = new Date();
+            
+                    if (current_iteration) {
+                        current_iteration_end_date = this._current_iteration.get('EndDate');
+                    }
+            
+                    // Add in the backlog target line and projected finish lines
+                    if (me._target_backlog === 0) {
+                        console.log("MRB", data.MostRecentBacklog);
+                        me._target_backlog = data.MostRecentBacklog;
+                        me._target_backlog_number_box.setValue(data.MostRecentBacklog);
+                    }
+            
+                    // Calculate projected finish based on optimistic/pessimistic velocities
+                    var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
+                    var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
+            
+                    console.log('number_sprints_optimistic: ', number_sprints_optimistic);
+                    console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+            
+                    data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
+                    data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
+            
+                    // If projections extend past our Release date, we need to
+                    // "pad" the data with fake iterations to plot projection
+                    var number_iterations_in_release = this._iterations.length;
+                    console.log('number_iterations_in_release: ', number_iterations_in_release);
+            
+                    if (number_sprints_pessimistic >= number_iterations_in_release) {
+            
+                        var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
+                        console.log("extra_sprints: ", extra_sprints);
+            
+                        var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
+                        var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
+                        var planned_velocity_adder = ending_cumulative_planned_velocity;
+            
+                        var sprint_base_name = "Release + ";
+            
+                        for (var i=0; i<=extra_sprints; i++) {
+                            var new_sprint_name = sprint_base_name + (i + 1);
+                            planned_velocity_adder += ending_planned_velocity;
+                            data.Name.push(new_sprint_name);
+                            data.TotalBacklog.push(null);
+                            data.PlannedVelocity.push(ending_planned_velocity);
+                            data.ActualVelocity.push(null);
+                            data.CumulativeActualVelocity.push(null);
+                            data.CumulativePlannedVelocity.push(planned_velocity_adder);
+                        }
+                    }
+            
                     // Now add in Optimistic/Pessimistic projected velocity data
                     var optimistic_velocity_adder = 0;
                     var pessimistic_velocity_adder = 0;
             
-                    Ext.Array.each(this._iterations, function(iteration) {
-                        pessimistic_velocity_adder += worst_historical_actual_velocity;
-                        optimistic_velocity_adder += best_historical_actual_velocity;
+                    Ext.Array.each(data.Name, function(iteration_name) {
+                        pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
+                        optimistic_velocity_adder += data.BestHistoricalActualVelocity;
             
                         // Only show projections if we haven't released
                         if (today < release_date) {
@@ -538,47 +602,7 @@
                         }
                     });
             
-                    // Calculate projected finish based on optimistic/pessimistic velocities
-                    var number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
-                    var number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
-            
-                    data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
-                    data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
-                    // Add in the backlog target line and projected finish lines
-                    if (me._target_backlog === 0) {
-                        console.log("MRB", most_recent_backlog);
-                        me._target_backlog = most_recent_backlog;
-                        me._target_backlog_number_box.setValue(most_recent_backlog);
-                    }
-            
-                    var index = 0;
-                    Ext.Array.each(this._iterations, function(iteration) {
-                        if (me._target_backlog !== 0) {
-                            data.TargetBacklog.push(me._target_backlog);
-                        } else {
-                            data.TargetBacklog.push(null);
-                        }
-            
-                        if (index === number_sprints_pessimistic && today < release_date) {
-                            data.ProjectedFinishPessimistic.push(me._target_backlog);
-                        } else {
-                            data.ProjectedFinishPessimistic.push(null);
-                        }
-            
-                        if (index === number_sprints_optimistic && today < release_date) {
-                            data.ProjectedFinishOptimistic.push(me._target_backlog);
-                        } else {
-                            data.ProjectedFinishOptimistic.push(null);
-                        }
-            
-                        index++;
-            
-                    });
-            
-                    console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
-                    console.log('number_sprints_optimistic: ', number_sprints_optimistic);
-            
-                    return data;
+                    me._chart_data = data;
                 },
             
                 _getBacklogOnEndOfIteration: function(iteration) {
@@ -642,7 +666,10 @@
                                 html: 'No iterations defined in the release bounds...'
                             });
                         } else {
-                            var chart_hash = this._assembleSprintData();
+                            this._assembleSprintData();
+                            this._assembleProjectedData();
+            
+                            var chart_hash = this._chart_data;
                             
                             this._log(chart_hash);
                             this._chart = this.down('#chart_box').add({
@@ -697,20 +724,6 @@
                                             marker: {
                                                 enabled: false
                                             }
-                                        },
-                                        {
-                                            type: 'column',
-                                            data: chart_hash.ProjectedFinishOptimistic,
-                                            name: 'Projected Finish (Optimistic)',
-                                            visible: true,
-                                            pointWidth: 4
-                                        },
-                                        {
-                                            type: 'column',
-                                            data: chart_hash.ProjectedFinishPessimistic,
-                                            name: 'Projected Finish (Pessimistic)',
-                                            visible: true,
-                                            pointWidth: 4
                                         }
                                     ]
                                 },
@@ -721,9 +734,7 @@
                                         text: 'LPC',
                                         align: 'center'
                                     },
-                                    /* -- Couldn't get the following to work
-                                    xAxis: {
-                                        categories: chart_hash.Name,
+                                    yAxis: [{
                                         plotLines: [
                                             {
                                                 color: '#000',
@@ -731,35 +742,45 @@
                                                 value: this._target_backlog
                                             }
                                         ]
-                                    },
-                                    -- */
-                                    yAxis: [{
-                                        plotLines: [
-                                        {
-                                            color: '#000',
-                                            width: 2,
-                                            value: this._target_backlog
-                                        }]
                                     }],
                                     xAxis: [{
                                         categories: chart_hash.Name,
                                         plotLines: [
-                                        {
-                                            color: '#a00',
-                                            width: 2,
-                                            value: chart_hash.ProjectedFinishPessimisticIndex
-                                        },
-                                        {
-                                            color: '#0a0',
-                                            width: 2,
-                                            value: chart_hash.ProjectedFinishOptimisticIndex
-                                        }
+                                            {
+                                                color: '#a00',
+                                                width: 2,
+                                                value: chart_hash.ProjectedFinishPessimisticIndex,
+                                                label: {
+                                                    text: 'Pessimistic Projected Finish',
+                                                    style: {
+                                                        color: '#a00'
+                                                    }
+                                                }
+                                            },
+                                            {
+                                                color: '#0a0',
+                                                width: 2,
+                                                value: chart_hash.ProjectedFinishOptimisticIndex,
+                                                label: {
+                                                    text: 'Optimistic Projected Finish',
+                                                    style: {
+                                                        color: '#0a0'
+                                                    }
+                                                }
+                                            }
                                         ]
                                     }]
                                 }
                             });
                         }
                     }
+                },
+            
+                _noIterationsNotify: function() {
+                    this._chart = this.down('#chart_box').add({
+                        xtype: 'container',
+                        html: "No Iterations Defined for Release at this Scoping."
+                    });
                 },
             
                 _log: function(msg) {
