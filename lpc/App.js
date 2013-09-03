@@ -200,7 +200,7 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     me._iterations = records;
-                    me._log('me._iterations: ', me._iterations);
+                    me._log(['me._iterations: ', me._iterations]);
                     if (me._iterations.length > 0) {
                         me._asynch_return_flags["iterations"] = true;
                         me._findReleaseBacklogAtEachIteration();
@@ -218,7 +218,7 @@ Ext.define('CustomApp', {
     _findAcceptedItemsInEachIteration: function() {
         var me = this;
 
-        me._log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
+        me._log(["_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations]);
 
         var iteration_query = [
             { property: "ScheduleState", operator: ">=", value: "Accepted" },
@@ -421,7 +421,8 @@ Ext.define('CustomApp', {
             ProjectedFinishPessimisticIndex: -1,
             MostRecentBacklog: 0,
             BestHistoricalActualVelocity: 0,
-            WorstHistoricalActualVelocity: 0
+            WorstHistoricalActualVelocity: 0,
+            FirstPositiveVelocityIterationIndex: -1
         };
 
         // Get timebox info
@@ -448,10 +449,9 @@ Ext.define('CustomApp', {
 
         // Number of historical iterations in data set
         var number_iterations = me._iterations.length;
-        var iteration_index = 0;
         var current_iteration_index = me._current_iteration_index;
 
-        Ext.Array.each(me._iterations, function(iteration) {
+        Ext.Array.each(me._iterations, function(iteration,iteration_index) {
             
             var this_end_date = iteration.get('EndDate');
             data.IterationEndDate.push(this_end_date);
@@ -468,19 +468,9 @@ Ext.define('CustomApp', {
             var actual_velocity = me._velocities[iteration.get('Name')] || 0;
             actual_velocity_adder += actual_velocity;
 
-            // Only consider data from most recent three iterations if at least three
-            // If we have less than 3 completed iterations, consider all data
-            if (current_iteration_index - iteration_index < 3 || current_iteration_index < 3) {
-                if (actual_velocity && actual_velocity > 0) {
-                    if (actual_velocity > best_historical_actual_velocity) {
-                        best_historical_actual_velocity = actual_velocity;
-                    }
-                    if (actual_velocity < worst_historical_actual_velocity) {
-                        worst_historical_actual_velocity = actual_velocity;
-                    }
-                }
+            if ( actual_velocity > 0 && data.FirstPositiveVelocityIterationIndex === -1 ) {
+                data.FirstPositiveVelocityIterationIndex = iteration_index;
             }
-            
             data.Name.push(iteration.get('Name'));
             data.PlannedVelocity.push(planned_velocity);
             data.ActualVelocity.push(actual_velocity);
@@ -491,18 +481,11 @@ Ext.define('CustomApp', {
                 actual_velocity_adder = null;
             }
             data.CumulativeActualVelocity.push(actual_velocity_adder);
-
-            iteration_index++;
-
         });
 
-        if (worst_historical_actual_velocity === this._really_big_number) {
-            worst_historical_actual_velocity = 0;
-        }
-
         data.MostRecentBacklog = most_recent_backlog;
-        data.BestHistoricalActualVelocity = best_historical_actual_velocity;
-        data.WorstHistoricalActualVelocity = worst_historical_actual_velocity;
+        data.BestHistoricalActualVelocity = me._determineBestHistoricalActualVelocity(me._velocities);
+        data.WorstHistoricalActualVelocity = me._determineWorstHistoricalActualVelocity(me._velocities);
 
         me._chart_data = data;
     },
@@ -532,24 +515,25 @@ Ext.define('CustomApp', {
             me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
 
-        var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
-        var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
+        var number_sprints_optimistic = Math.ceil(me._target_backlog/data.BestHistoricalActualVelocity);
+        var number_sprints_pessimistic = Math.ceil(me._target_backlog/data.WorstHistoricalActualVelocity);
 
-        me._log('number_sprints_optimistic: ', number_sprints_optimistic);
-        me._log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+        me._log(['number_sprints_optimistic: ', number_sprints_optimistic,
+            'number_sprints_pessimistic: ', number_sprints_pessimistic]);
 
-        data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
-        data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
+        // when likely to finish (if starting at first positive sprint)
+        data.ProjectedFinishOptimisticIndex = data.FirstPositiveVelocityIterationIndex + number_sprints_optimistic - 1;
+        data.ProjectedFinishPessimisticIndex = data.FirstPositiveVelocityIterationIndex + number_sprints_pessimistic - 1 ;
 
         // If projections extend past our Release date, we need to
         // "pad" the data with fake iterations to plot projection
-        var number_iterations_in_release = this._iterations.length;
-        me._log('number_iterations_in_release: ', number_iterations_in_release);
+        var number_iterations_in_release = this._iterations.length - data.FirstPositiveVelocityIterationIndex;
+        me._log(['number_iterations_in_release: ', number_iterations_in_release]);
 
         if (number_sprints_pessimistic >= number_iterations_in_release) {
 
             var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
-            me._log("extra_sprints: ", extra_sprints);
+            me._log(["extra_sprints: ", extra_sprints]);
 
             var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
             var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
@@ -573,18 +557,22 @@ Ext.define('CustomApp', {
         var optimistic_velocity_adder = 0;
         var pessimistic_velocity_adder = 0;
 
-        Ext.Array.each(data.Name, function(iteration_name) {
-            pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
-            optimistic_velocity_adder += data.BestHistoricalActualVelocity;
-
-            // Only show projections if we haven't released
-            if (today < release_date) {
-                data.OptimisticProjectedVelocity.push(optimistic_velocity_adder);
-                data.PessimisticProjectedVelocity.push(pessimistic_velocity_adder);
-            } else {
-                data.OptimisticProjectedVelocity.push(null);
-                data.PessimisticProjectedVelocity.push(null);
+        Ext.Array.each(data.Name, function(iteration_name, iteration_index) {
+            var cumulative_optimistic_velocity = null;
+            var cumulative_pessimistic_velocity = null;
+            
+            if ( iteration_index >= data.FirstPositiveVelocityIterationIndex) {
+                pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
+                optimistic_velocity_adder += data.BestHistoricalActualVelocity;
+    
+                // Only show projections if we haven't released
+                if (today < release_date) {
+                    cumulative_optimistic_velocity = optimistic_velocity_adder;
+                    cumulative_pessimistic_velocity = pessimistic_velocity_adder;
+                }
             }
+            data.OptimisticProjectedVelocity.push(cumulative_optimistic_velocity);
+            data.PessimisticProjectedVelocity.push(cumulative_pessimistic_velocity);
         });
 
         me._chart_data = data;
@@ -607,6 +595,7 @@ Ext.define('CustomApp', {
         var this_release = this._release;
         var this_release_date = this_release.get('ReleaseDate');
         var this_release_start_date = this_release.get('ReleaseStartDate');
+        this._log(["_isSelectedReleaseCurrent",(today > this_release_start_date && today <= this_release_date)])
         return (today > this_release_start_date && today <= this_release_date);
     },
 
@@ -616,10 +605,47 @@ Ext.define('CustomApp', {
     },
 
     // Function to find best historical sprint velocity for use in forecasting
-    _findBestHistoricalActualVelocity: function() {
-
+    _determineBestHistoricalActualVelocity: function(velocity_hash) {
+        var velocity = null;
+        
+        var velocities = [];
+        for ( var i in velocity_hash ) {
+            velocities.push(velocity_hash[i]);
+        }
+        
+        if ( velocities.length > 0 ) {
+            velocities.sort();
+            var velocities_to_average = velocities;
+            if ( velocities.length >= 3 ) {
+                velocities_to_average = Ext.Array.slice(velocities,-3);
+            }
+            
+            velocity = Ext.Array.mean(velocities_to_average);
+            this._log(["best",velocity_hash,velocities,velocities_to_average,velocity]);
+        }
+        return velocity;
     },
-
+    // Function to find worst historical sprint velocity for use in forecasting
+    _determineWorstHistoricalActualVelocity: function(velocity_hash) {
+        var velocity = null;
+        
+        var velocities = [];
+        for ( var i in velocity_hash ) {
+            velocities.push(velocity_hash[i]);
+        }
+        
+        if ( velocities.length > 0 ) {
+            velocities.sort();
+            var velocities_to_average = velocities;
+            if ( velocities.length >= 3 ) {
+                velocities_to_average = Ext.Array.slice(velocities,0,3);
+            }
+            
+            velocity = Ext.Array.mean(velocities_to_average);
+            this._log(["worst",velocity_hash,velocities,velocities_to_average,velocity]);
+        }
+        return velocity;
+    },
     _finished_all_asynchronous_calls: function() {
         var proceed = true;
         if (!this._asynch_return_flags["flows"]) {
