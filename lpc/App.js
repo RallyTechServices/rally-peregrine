@@ -13,7 +13,7 @@ Ext.define('CustomApp', {
     _velocities: {},
     _trend_data: {},
     _target_backlog: 0,
-    _really_big_number: 1000000000000,
+    _really_big_number: 1000000000000000,
     _chart_data: null,
     defaults: { padding: 10, margin: 5 },
     items: [
@@ -532,7 +532,6 @@ Ext.define('CustomApp', {
             me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
 
-        // Calculate projected finish based on optimistic/pessimistic velocities
         var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
         var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
 
@@ -563,10 +562,10 @@ Ext.define('CustomApp', {
                 planned_velocity_adder += ending_planned_velocity;
                 data.Name.push(new_sprint_name);
                 data.TotalBacklog.push(null);
-                data.PlannedVelocity.push(ending_planned_velocity);
+                data.PlannedVelocity.push(null);
                 data.ActualVelocity.push(null);
                 data.CumulativeActualVelocity.push(null);
-                data.CumulativePlannedVelocity.push(planned_velocity_adder);
+                data.CumulativePlannedVelocity.push(null);
             }
         }
 
@@ -601,6 +600,19 @@ Ext.define('CustomApp', {
             // this._doubleLineLog("backlog", backlog);
         }
         return backlog;
+    },
+
+    _isSelectedReleaseCurrent: function() {
+        var today = new Date();
+        var this_release = this._release;
+        var this_release_date = this_release.get('ReleaseDate');
+        var this_release_start_date = this_release.get('ReleaseStartDate');
+        return (today > this_release_start_date && today <= this_release_date);
+    },
+
+    _areBestWorstVelocityNonZero: function() {
+        var data = this._chart_data;
+        return (data.BestHistoricalActualVelocity > 0 && data.WorstHistoricalActualVelocity > 0);
     },
 
     // Function to find best historical sprint velocity for use in forecasting
@@ -645,6 +657,8 @@ Ext.define('CustomApp', {
 
         // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
         // this._doubleLineLog("this._velocities", this._velocities);
+
+
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
@@ -653,7 +667,11 @@ Ext.define('CustomApp', {
                 });
             } else {
                 this._assembleSprintData();
-                this._assembleProjectedData();
+
+                // Only project if selected Release is current
+                if (this._isSelectedReleaseCurrent() && this._areBestWorstVelocityNonZero()) {
+                    this._assembleProjectedData();
+                }
 
                 var chart_hash = this._chart_data;
                 
@@ -725,7 +743,13 @@ Ext.define('CustomApp', {
                                 {
                                     color: '#000',
                                     width: 2,
-                                    value: this._target_backlog
+                                    value: this._target_backlog,
+                                    label: {
+                                        text: 'Target Backlog (Points)',
+                                        style: {
+                                            color: '#000'
+                                        }
+                                    }
                                 }
                             ]
                         }],

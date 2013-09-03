@@ -27,7 +27,7 @@
                 _velocities: {},
                 _trend_data: {},
                 _target_backlog: 0,
-                _really_big_number: 1000000000000,
+                _really_big_number: 1000000000000000,
                 _chart_data: null,
                 defaults: { padding: 10, margin: 5 },
                 items: [
@@ -214,7 +214,7 @@
                             scope: this,
                             load: function(store, records) {
                                 me._iterations = records;
-                                console.log('me._iterations: ', me._iterations);
+                                me._log('me._iterations: ', me._iterations);
                                 if (me._iterations.length > 0) {
                                     me._asynch_return_flags["iterations"] = true;
                                     me._findReleaseBacklogAtEachIteration();
@@ -232,7 +232,7 @@
                 _findAcceptedItemsInEachIteration: function() {
                     var me = this;
             
-                    console.log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
+                    me._log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
             
                     var iteration_query = [
                         { property: "ScheduleState", operator: ">=", value: "Accepted" },
@@ -255,7 +255,7 @@
                                         var iteration_name = record.get('Iteration').Name;
                                         if ( record.get('PlanEstimate') ) {
                                             if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                                console.log("clearing velocity for " + iteration_name);
+                                                me._log("clearing velocity for " + iteration_name);
                                                 me._velocities[iteration_name] = 0;
                                             }
                                             me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
@@ -541,17 +541,16 @@
             
                     // Add in the backlog target line and projected finish lines
                     if (me._target_backlog === 0) {
-                        console.log("MRB", data.MostRecentBacklog);
+                        me._log("MRB", data.MostRecentBacklog);
                         me._target_backlog = data.MostRecentBacklog;
                         me._target_backlog_number_box.setValue(data.MostRecentBacklog);
                     }
             
-                    // Calculate projected finish based on optimistic/pessimistic velocities
                     var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
                     var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
             
-                    console.log('number_sprints_optimistic: ', number_sprints_optimistic);
-                    console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+                    me._log('number_sprints_optimistic: ', number_sprints_optimistic);
+                    me._log('number_sprints_pessimistic: ', number_sprints_pessimistic);
             
                     data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
                     data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
@@ -559,12 +558,12 @@
                     // If projections extend past our Release date, we need to
                     // "pad" the data with fake iterations to plot projection
                     var number_iterations_in_release = this._iterations.length;
-                    console.log('number_iterations_in_release: ', number_iterations_in_release);
+                    me._log('number_iterations_in_release: ', number_iterations_in_release);
             
                     if (number_sprints_pessimistic >= number_iterations_in_release) {
             
                         var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
-                        console.log("extra_sprints: ", extra_sprints);
+                        me._log("extra_sprints: ", extra_sprints);
             
                         var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
                         var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
@@ -577,10 +576,10 @@
                             planned_velocity_adder += ending_planned_velocity;
                             data.Name.push(new_sprint_name);
                             data.TotalBacklog.push(null);
-                            data.PlannedVelocity.push(ending_planned_velocity);
+                            data.PlannedVelocity.push(null);
                             data.ActualVelocity.push(null);
                             data.CumulativeActualVelocity.push(null);
-                            data.CumulativePlannedVelocity.push(planned_velocity_adder);
+                            data.CumulativePlannedVelocity.push(null);
                         }
                     }
             
@@ -615,6 +614,19 @@
                         // this._doubleLineLog("backlog", backlog);
                     }
                     return backlog;
+                },
+            
+                _isSelectedReleaseCurrent: function() {
+                    var today = new Date();
+                    var this_release = this._release;
+                    var this_release_date = this_release.get('ReleaseDate');
+                    var this_release_start_date = this_release.get('ReleaseStartDate');
+                    return (today > this_release_start_date && today <= this_release_date);
+                },
+            
+                _areBestWorstVelocityNonZero: function() {
+                    var data = this._chart_data;
+                    return (data.BestHistoricalActualVelocity > 0 && data.WorstHistoricalActualVelocity > 0);
                 },
             
                 // Function to find best historical sprint velocity for use in forecasting
@@ -659,6 +671,8 @@
             
                     // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
                     // this._doubleLineLog("this._velocities", this._velocities);
+            
+            
                     if ( this._finished_all_asynchronous_calls() ) {
                         if (this._iterations.length === 0) {
                             this._chart = this.down('#chart_box').add({
@@ -667,7 +681,11 @@
                             });
                         } else {
                             this._assembleSprintData();
-                            this._assembleProjectedData();
+            
+                            // Only project if selected Release is current
+                            if (this._isSelectedReleaseCurrent() && this._areBestWorstVelocityNonZero()) {
+                                this._assembleProjectedData();
+                            }
             
                             var chart_hash = this._chart_data;
                             
@@ -739,7 +757,13 @@
                                             {
                                                 color: '#000',
                                                 width: 2,
-                                                value: this._target_backlog
+                                                value: this._target_backlog,
+                                                label: {
+                                                    text: 'Target Backlog (Points)',
+                                                    style: {
+                                                        color: '#000'
+                                                    }
+                                                }                                    
                                             }
                                         ]
                                     }],
