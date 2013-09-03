@@ -13,7 +13,8 @@ Ext.define('CustomApp', {
     _velocities: {},
     _trend_data: {},
     _target_backlog: 0,
-    _really_big_number: 1000000,
+    _really_big_number: 1000000000000000,
+    _chart_data: null,
     defaults: { padding: 10, margin: 5 },
     items: [
         {
@@ -118,9 +119,9 @@ Ext.define('CustomApp', {
                         // within our current release (like on a weekend). Find the closest
                         // iteration to "now".
                         var today = new Date().getTime();
-                        // Times are in milliseconds - multiply big number by 1000 to make
+                        // Times are in milliseconds - use our really big number to make
                         // sure we get a difference less than our "infinity"
-                        var min_time_delta = this._really_big_number*1000;
+                        var min_time_delta = this._really_big_number;
                         var closest_iteration;
                         Ext.Array.each(me._iterations, function(iteration) {
                             var this_iteration_end_date = iteration.get('EndDate');
@@ -199,11 +200,16 @@ Ext.define('CustomApp', {
                 scope: this,
                 load: function(store, records) {
                     me._iterations = records;
-                    me._asynch_return_flags["iterations"] = true;
-                    me._findReleaseBacklogAtEachIteration();
-                    me._findAcceptedItemsInEachIteration();
-                    me._findCurrentIteration();
-                    me._makeChart();
+                    me._log('me._iterations: ', me._iterations);
+                    if (me._iterations.length > 0) {
+                        me._asynch_return_flags["iterations"] = true;
+                        me._findReleaseBacklogAtEachIteration();
+                        me._findAcceptedItemsInEachIteration();
+                        me._findCurrentIteration();
+                        me._makeChart();
+                    } else {
+                        me._noIterationsNotify();
+                    }
                 }
             }
         });
@@ -212,7 +218,7 @@ Ext.define('CustomApp', {
     _findAcceptedItemsInEachIteration: function() {
         var me = this;
 
-        console.log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
+        me._log("_findAcceptedItemsInEachIteration: me._iterations: ", me._iterations);
 
         var iteration_query = [
             { property: "ScheduleState", operator: ">=", value: "Accepted" },
@@ -235,7 +241,7 @@ Ext.define('CustomApp', {
                             var iteration_name = record.get('Iteration').Name;
                             if ( record.get('PlanEstimate') ) {
                                 if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                    console.log("clearing velocity for " + iteration_name);
+                                    me._log("clearing velocity for " + iteration_name);
                                     me._velocities[iteration_name] = 0;
                                 }
                                 me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
@@ -400,7 +406,6 @@ Ext.define('CustomApp', {
 
     _assembleSprintData: function(){
         var me = this;
-
         var data = {
             Name: [],
             IterationEndDate: [],
@@ -412,13 +417,14 @@ Ext.define('CustomApp', {
             CumulativeActualVelocity: [],
             OptimisticProjectedVelocity: [],
             PessimisticProjectedVelocity: [],
-            ProjectedFinishOptimistic: [],
-            ProjectedFinishPessimistic: [],
             ProjectedFinishOptimisticIndex: -1,
             ProjectedFinishPessimisticIndex: -1,
-            BestHistoricalActualVelocity: 0
+            MostRecentBacklog: 0,
+            BestHistoricalActualVelocity: 0,
+            WorstHistoricalActualVelocity: 0
         };
 
+        // Get timebox info
         var current_iteration = this._current_iteration;
         var current_iteration_end_date;
 
@@ -450,13 +456,14 @@ Ext.define('CustomApp', {
             var this_end_date = iteration.get('EndDate');
             data.IterationEndDate.push(this_end_date);
 
-            var planned_velocity = iteration.get('PlannedVelocity') || 0;
-            planned_velocity_adder += planned_velocity;
-            
             var backlog = me._getBacklogOnEndOfIteration(iteration);
             if (backlog) {
                 most_recent_backlog = backlog;
             }
+            data.TotalBacklog.push(backlog);
+
+            var planned_velocity = iteration.get('PlannedVelocity') || 0;
+            planned_velocity_adder += planned_velocity;
             
             var actual_velocity = me._velocities[iteration.get('Name')] || 0;
             actual_velocity_adder += actual_velocity;
@@ -484,18 +491,8 @@ Ext.define('CustomApp', {
                 actual_velocity_adder = null;
             }
             data.CumulativeActualVelocity.push(actual_velocity_adder);
-            data.TotalBacklog.push(backlog);
 
             iteration_index++;
-
-            /* --
-                me._log("data as pushed:");
-                me._doubleLineLog("name", iteration.get('Name'));
-                me._doubleLineLog("this_end_date", this_end_date);            
-                me._doubleLineLog("planned_velocity", planned_velocity);
-                me._doubleLineLog("actual_velocity", actual_velocity);
-                me._doubleLineLog("backlog", backlog);
-            -- */
 
         });
 
@@ -503,16 +500,82 @@ Ext.define('CustomApp', {
             worst_historical_actual_velocity = 0;
         }
 
-        console.log('best_historical_actual_velocity: ', best_historical_actual_velocity);
-        console.log('worst_historical_actual_velocity: ', worst_historical_actual_velocity);
-        
+        data.MostRecentBacklog = most_recent_backlog;
+        data.BestHistoricalActualVelocity = best_historical_actual_velocity;
+        data.WorstHistoricalActualVelocity = worst_historical_actual_velocity;
+
+        me._chart_data = data;
+    },
+
+    _assembleProjectedData: function() {
+
+        var me = this;
+        var data = this._chart_data;
+
+        // Get timebox info
+        var current_iteration = this._current_iteration;
+        var current_iteration_end_date;
+
+        var current_release = this._release;
+        var release_date = current_release.get('ReleaseDate');
+
+        var today = new Date();
+
+        if (current_iteration) {
+            current_iteration_end_date = this._current_iteration.get('EndDate');
+        }
+
+        // Add in the backlog target line and projected finish lines
+        if (me._target_backlog === 0) {
+            me._log("MRB", data.MostRecentBacklog);
+            me._target_backlog = data.MostRecentBacklog;
+            me._target_backlog_number_box.setValue(data.MostRecentBacklog);
+        }
+
+        var number_sprints_optimistic = Math.floor(me._target_backlog/data.BestHistoricalActualVelocity);
+        var number_sprints_pessimistic = Math.floor(me._target_backlog/data.WorstHistoricalActualVelocity);
+
+        me._log('number_sprints_optimistic: ', number_sprints_optimistic);
+        me._log('number_sprints_pessimistic: ', number_sprints_pessimistic);
+
+        data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
+        data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
+
+        // If projections extend past our Release date, we need to
+        // "pad" the data with fake iterations to plot projection
+        var number_iterations_in_release = this._iterations.length;
+        me._log('number_iterations_in_release: ', number_iterations_in_release);
+
+        if (number_sprints_pessimistic >= number_iterations_in_release) {
+
+            var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
+            me._log("extra_sprints: ", extra_sprints);
+
+            var ending_cumulative_planned_velocity = data.CumulativePlannedVelocity[number_iterations_in_release-1];
+            var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
+            var planned_velocity_adder = ending_cumulative_planned_velocity;
+
+            var sprint_base_name = "Release + ";
+
+            for (var i=0; i<=extra_sprints; i++) {
+                var new_sprint_name = sprint_base_name + (i + 1);
+                planned_velocity_adder += ending_planned_velocity;
+                data.Name.push(new_sprint_name);
+                data.TotalBacklog.push(null);
+                data.PlannedVelocity.push(null);
+                data.ActualVelocity.push(null);
+                data.CumulativeActualVelocity.push(null);
+                data.CumulativePlannedVelocity.push(null);
+            }
+        }
+
         // Now add in Optimistic/Pessimistic projected velocity data
         var optimistic_velocity_adder = 0;
         var pessimistic_velocity_adder = 0;
 
-        Ext.Array.each(this._iterations, function(iteration) {
-            pessimistic_velocity_adder += worst_historical_actual_velocity;
-            optimistic_velocity_adder += best_historical_actual_velocity;
+        Ext.Array.each(data.Name, function(iteration_name) {
+            pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
+            optimistic_velocity_adder += data.BestHistoricalActualVelocity;
 
             // Only show projections if we haven't released
             if (today < release_date) {
@@ -524,47 +587,7 @@ Ext.define('CustomApp', {
             }
         });
 
-        // Calculate projected finish based on optimistic/pessimistic velocities
-        var number_sprints_optimistic = Math.ceil(me._target_backlog/best_historical_actual_velocity);
-        var number_sprints_pessimistic = Math.ceil(me._target_backlog/worst_historical_actual_velocity);
-
-        data.ProjectedFinishOptimisticIndex = number_sprints_optimistic;
-        data.ProjectedFinishPessimisticIndex = number_sprints_pessimistic;
-        // Add in the backlog target line and projected finish lines
-        if (me._target_backlog === 0) {
-            console.log("MRB", most_recent_backlog);
-            me._target_backlog = most_recent_backlog;
-            me._target_backlog_number_box.setValue(most_recent_backlog);
-        }
-
-        var index = 0;
-        Ext.Array.each(this._iterations, function(iteration) {
-            if (me._target_backlog !== 0) {
-                data.TargetBacklog.push(me._target_backlog);
-            } else {
-                data.TargetBacklog.push(null);
-            }
-
-            if (index === number_sprints_pessimistic && today < release_date) {
-                data.ProjectedFinishPessimistic.push(me._target_backlog);
-            } else {
-                data.ProjectedFinishPessimistic.push(null);
-            }
-
-            if (index === number_sprints_optimistic && today < release_date) {
-                data.ProjectedFinishOptimistic.push(me._target_backlog);
-            } else {
-                data.ProjectedFinishOptimistic.push(null);
-            }
-
-            index++;
-
-        });
-
-        console.log('number_sprints_pessimistic: ', number_sprints_pessimistic);
-        console.log('number_sprints_optimistic: ', number_sprints_optimistic);
-
-        return data;
+        me._chart_data = data;
     },
 
     _getBacklogOnEndOfIteration: function(iteration) {
@@ -577,6 +600,19 @@ Ext.define('CustomApp', {
             // this._doubleLineLog("backlog", backlog);
         }
         return backlog;
+    },
+
+    _isSelectedReleaseCurrent: function() {
+        var today = new Date();
+        var this_release = this._release;
+        var this_release_date = this_release.get('ReleaseDate');
+        var this_release_start_date = this_release.get('ReleaseStartDate');
+        return (today > this_release_start_date && today <= this_release_date);
+    },
+
+    _areBestWorstVelocityNonZero: function() {
+        var data = this._chart_data;
+        return (data.BestHistoricalActualVelocity > 0 && data.WorstHistoricalActualVelocity > 0);
     },
 
     // Function to find best historical sprint velocity for use in forecasting
@@ -621,6 +657,8 @@ Ext.define('CustomApp', {
 
         // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
         // this._doubleLineLog("this._velocities", this._velocities);
+
+
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
@@ -628,7 +666,14 @@ Ext.define('CustomApp', {
                     html: 'No iterations defined in the release bounds...'
                 });
             } else {
-                var chart_hash = this._assembleSprintData();
+                this._assembleSprintData();
+
+                // Only project if selected Release is current
+                if (this._isSelectedReleaseCurrent() && this._areBestWorstVelocityNonZero()) {
+                    this._assembleProjectedData();
+                }
+
+                var chart_hash = this._chart_data;
                 
                 this._log(chart_hash);
                 this._chart = this.down('#chart_box').add({
@@ -683,20 +728,6 @@ Ext.define('CustomApp', {
                                 marker: {
                                     enabled: false
                                 }
-                            },
-                            {
-                                type: 'column',
-                                data: chart_hash.ProjectedFinishOptimistic,
-                                name: 'Projected Finish (Optimistic)',
-                                visible: true,
-                                pointWidth: 4
-                            },
-                            {
-                                type: 'column',
-                                data: chart_hash.ProjectedFinishPessimistic,
-                                name: 'Projected Finish (Pessimistic)',
-                                visible: true,
-                                pointWidth: 4
                             }
                         ]
                     },
@@ -707,45 +738,59 @@ Ext.define('CustomApp', {
                             text: 'LPC',
                             align: 'center'
                         },
-                        /* -- Couldn't get the following to work
-                        xAxis: {
-                            categories: chart_hash.Name,
+                        yAxis: [{
                             plotLines: [
                                 {
                                     color: '#000',
                                     width: 2,
-                                    value: this._target_backlog
+                                    value: this._target_backlog,
+                                    label: {
+                                        text: 'Target Backlog (Points)',
+                                        style: {
+                                            color: '#000'
+                                        }
+                                    }
                                 }
                             ]
-                        },
-                        -- */
-                        yAxis: [{
-                            plotLines: [
-                            {
-                                color: '#000',
-                                width: 2,
-                                value: this._target_backlog
-                            }]
                         }],
                         xAxis: [{
                             categories: chart_hash.Name,
                             plotLines: [
-                            {
-                                color: '#a00',
-                                width: 2,
-                                value: chart_hash.ProjectedFinishPessimisticIndex
-                            },
-                            {
-                                color: '#0a0',
-                                width: 2,
-                                value: chart_hash.ProjectedFinishOptimisticIndex
-                            }
+                                {
+                                    color: '#a00',
+                                    width: 2,
+                                    value: chart_hash.ProjectedFinishPessimisticIndex,
+                                    label: {
+                                        text: 'Pessimistic Projected Finish',
+                                        style: {
+                                            color: '#a00'
+                                        }
+                                    }
+                                },
+                                {
+                                    color: '#0a0',
+                                    width: 2,
+                                    value: chart_hash.ProjectedFinishOptimisticIndex,
+                                    label: {
+                                        text: 'Optimistic Projected Finish',
+                                        style: {
+                                            color: '#0a0'
+                                        }
+                                    }
+                                }
                             ]
                         }]
                     }
                 });
             }
         }
+    },
+
+    _noIterationsNotify: function() {
+        this._chart = this.down('#chart_box').add({
+            xtype: 'container',
+            html: "No Iterations Defined for Release at this Scoping."
+        });
     },
 
     _log: function(msg) {
