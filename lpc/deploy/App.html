@@ -695,9 +695,7 @@
             
                 _makeChart: function() {
             
-                    // this._doubleLineLog("this._release_flow_hash:", this._release_flow_hash)
-                    // this._doubleLineLog("this._velocities", this._velocities);
-            
+                    var me = this;
             
                     if ( this._finished_all_asynchronous_calls() ) {
                         if (this._iterations.length === 0) {
@@ -795,30 +793,7 @@
                                     }],
                                     xAxis: [{
                                         categories: chart_hash.Name,
-                                        plotLines: [
-                                            {
-                                                color: '#a00',
-                                                width: 2,
-                                                value: chart_hash.ProjectedFinishPessimisticIndex,
-                                                label: {
-                                                    text: 'Pessimistic Projected Finish',
-                                                    style: {
-                                                        color: '#a00'
-                                                    }
-                                                }
-                                            },
-                                            {
-                                                color: '#0a0',
-                                                width: 2,
-                                                value: chart_hash.ProjectedFinishOptimisticIndex,
-                                                label: {
-                                                    text: 'Optimistic Projected Finish',
-                                                    style: {
-                                                        color: '#0a0'
-                                                    }
-                                                }
-                                            }
-                                        ]
+                                        plotLines: me._getPlotLines(chart_hash)
                                     }]
                                 }
                             });
@@ -826,6 +801,50 @@
                     }
                 },
             
+                _getPlotLines: function(data) {
+                    var plotlines = [];
+                    if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex ) {
+                        plotlines = [
+                                        {
+                                            color: '#0a0',
+                                            width: 2,
+                                            value: data.ProjectedFinishPessimisticIndex,
+                                            label: {
+                                                text: 'Projected Finish',
+                                                style: {
+                                                    color: '#a00'
+                                                }
+                                            }
+                                        }
+                                    ];
+                    } else {
+                        plotlines = [
+                                        {
+                                            color: '#a00',
+                                            width: 2,
+                                            value: data.ProjectedFinishPessimisticIndex,
+                                            label: {
+                                                text: 'Pessimistic Projected Finish',
+                                                style: {
+                                                    color: '#a00'
+                                                }
+                                            }
+                                        },
+                                        {
+                                            color: '#0a0',
+                                            width: 2,
+                                            value: data.ProjectedFinishOptimisticIndex,
+                                            label: {
+                                                text: 'Optimistic Projected Finish',
+                                                style: {
+                                                    color: '#0a0'
+                                                }
+                                            }
+                                        }
+                                    ];
+                    }
+                    return plotlines;
+                },
                 _noIterationsNotify: function() {
                     this._chart = this.down('#chart_box').add({
                         xtype: 'container',
