@@ -680,9 +680,8 @@ Ext.define('CustomApp', {
     },
 
     _makeChart: function() {
-
         var me = this;
-
+        this._log("_makeChart");
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
@@ -704,7 +703,6 @@ Ext.define('CustomApp', {
                     xtype: 'rallychart',
                     chartData: {
                         categories: chart_hash.Name,
-                        
                         series: [
                             {
                                 type: 'column',
@@ -739,11 +737,12 @@ Ext.define('CustomApp', {
                                 type: 'line',
                                 data: chart_hash.PessimisticProjectedVelocity,
                                 name: 'Pessimistic Projected Velocity',
+                                color: '#0a0',
                                 visible: true,
                                 marker: {
                                     enabled: false
                                 }
-                            },
+                            }/*,
                             {
                                 type: 'line',
                                 data: chart_hash.TargetBacklog,
@@ -752,7 +751,7 @@ Ext.define('CustomApp', {
                                 marker: {
                                     enabled: false
                                 }
-                            }
+                            }*/
                         ]
                     },
                     height: 350,
@@ -783,6 +782,7 @@ Ext.define('CustomApp', {
                         }]
                     }
                 });
+                this._chart.setChartColors(['#B5D8EB','#5C9ACB','#6ab17d','#f47168']);
             }
         }
     },
