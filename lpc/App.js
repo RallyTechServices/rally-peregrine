@@ -90,7 +90,7 @@ Ext.define('CustomApp', {
             { property: "StartDate", operator:"<=", value: today_iso_string },
             { property: "EndDate", operator:">=", value: today_iso_string }
         ];
-        
+
         var current_iteration_store = Ext.create('Rally.data.WsapiDataStore',{
             model: 'Iteration',
             autoLoad: true,
@@ -163,7 +163,7 @@ Ext.define('CustomApp', {
     },
 
     _findIterationsBetweenDates: function(  ) {
-        
+
         var me = this;
 
         if ( this._chart ) {
@@ -181,9 +181,11 @@ Ext.define('CustomApp', {
 
         var iteration_query = [
             { property: "StartDate", operator:">=", value: start_date_iso },
-            { property: "EndDate", operator:"<=", value: end_date_iso }
+            // Changed to StartDate for high end of query since Philips expects to
+            // see any Iteration that "touches" a Release be included
+            { property: "StartDate", operator:"<=", value: end_date_iso }
         ];
-        
+
         var iteration_store = Ext.create('Rally.data.WsapiDataStore',{
             model: 'Iteration',
             autoLoad: true,
@@ -224,7 +226,7 @@ Ext.define('CustomApp', {
             { property: "ScheduleState", operator: ">=", value: "Accepted" },
             { property: "Release.Name", operator: "=", value: this._release.get("Name") }
         ];
-        
+
         this._velocities = {}; // key will be iteration name
 
         Ext.create('Rally.data.WsapiDataStore', {
@@ -285,7 +287,7 @@ Ext.define('CustomApp', {
     // This function finds items that were added to the backlog today and are not yet
     // captured in ReleaseCumulativeFlow data
     _findTodaysReleaseBacklog: function() {
-        
+
         var me = this;
         var this_release = this._release.get('ObjectID');
         var this_iteration = this._current_iteration;
@@ -304,7 +306,7 @@ Ext.define('CustomApp', {
                 { property: "Release.ObjectID", operator: "=", value: this_release }
             ];
 
-            // Do a non-flow query for Work Products assigned to the Release 
+            // Do a non-flow query for Work Products assigned to the Release
             // include them on the backlog line
             Ext.create('Rally.data.WsapiDataStore', {
                 model:'UserStory',
@@ -368,7 +370,7 @@ Ext.define('CustomApp', {
             property:'ReleaseObjectID',
             value:this._release.get('ObjectID')
         });
-        
+
         Ext.create('Rally.data.WsapiDataStore',{
             model: 'ReleaseCumulativeFlowData',
             autoLoad: true,
@@ -389,7 +391,7 @@ Ext.define('CustomApp', {
 
                         var plan_estimate = card.get('CardEstimateTotal');
                         // me._doubleLineLog("plan_estimate", plan_estimate)
-                        
+
                         if ( !me._release_flow_hash[capture_date] ) {
                             me._release_flow_hash[capture_date] = 0;
                         }
@@ -452,7 +454,7 @@ Ext.define('CustomApp', {
         var current_iteration_index = me._current_iteration_index;
 
         Ext.Array.each(me._iterations, function(iteration,iteration_index) {
-            
+
             var this_end_date = iteration.get('EndDate');
             data.IterationEndDate.push(this_end_date);
 
@@ -464,7 +466,7 @@ Ext.define('CustomApp', {
 
             var planned_velocity = iteration.get('PlannedVelocity') || 0;
             planned_velocity_adder += planned_velocity;
-            
+
             var actual_velocity = me._velocities[iteration.get('Name')] || 0;
             actual_velocity_adder += actual_velocity;
 
@@ -474,7 +476,7 @@ Ext.define('CustomApp', {
             data.Name.push(iteration.get('Name'));
             data.PlannedVelocity.push(planned_velocity);
             data.ActualVelocity.push(actual_velocity);
-            
+
             data.CumulativePlannedVelocity.push(planned_velocity_adder);
             // Show null value for Cumulative Actual Velocity for sprints that have not yet occurred
             if (this_end_date > current_iteration_end_date) {
@@ -539,10 +541,10 @@ Ext.define('CustomApp', {
             var ending_planned_velocity = data.PlannedVelocity[number_iterations_in_release-1];
             var planned_velocity_adder = ending_cumulative_planned_velocity;
 
-            var sprint_base_name = "Release + ";
+            var sprint_base_name = " Sprint";
 
             for (var i=0; i<=extra_sprints; i++) {
-                var new_sprint_name = sprint_base_name + (i + 1);
+                var new_sprint_name = "+ " + (i + 1) + sprint_base_name;
                 planned_velocity_adder += ending_planned_velocity;
                 data.Name.push(new_sprint_name);
                 data.TotalBacklog.push(null);
@@ -560,11 +562,11 @@ Ext.define('CustomApp', {
         Ext.Array.each(data.Name, function(iteration_name, iteration_index) {
             var cumulative_optimistic_velocity = null;
             var cumulative_pessimistic_velocity = null;
-            
+
             if ( iteration_index >= data.FirstPositiveVelocityIterationIndex) {
                 pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
                 optimistic_velocity_adder += data.BestHistoricalActualVelocity;
-    
+
                 // Only show projections if we haven't released
                 if (today < release_date) {
                     cumulative_optimistic_velocity = optimistic_velocity_adder;
@@ -595,7 +597,7 @@ Ext.define('CustomApp', {
         var this_release = this._release;
         var this_release_date = this_release.get('ReleaseDate');
         var this_release_start_date = this_release.get('ReleaseStartDate');
-        this._log(["_isSelectedReleaseCurrent",(today > this_release_start_date && today <= this_release_date)])
+        this._log(["_isSelectedReleaseCurrent", (today > this_release_start_date && today <= this_release_date)]);
         return (today > this_release_start_date && today <= this_release_date);
     },
 
@@ -607,45 +609,55 @@ Ext.define('CustomApp', {
     // Function to find best historical sprint velocity for use in forecasting
     _determineBestHistoricalActualVelocity: function(velocity_hash) {
         var velocity = null;
-        
+
         var velocities = [];
         for ( var i in velocity_hash ) {
             velocities.push(velocity_hash[i]);
         }
-        
+
         if ( velocities.length > 0 ) {
             velocities.sort();
             var velocities_to_average = velocities;
             if ( velocities.length >= 3 ) {
-                velocities_to_average = Ext.Array.slice(velocities,-3);
+                velocities_to_average = Ext.Array.slice(velocities, -3);
             }
-            
-            velocity = Ext.Array.mean(velocities_to_average);
-            this._log(["best",velocity_hash,velocities,velocities_to_average,velocity]);
+
+            var best_velocity = 0;
+            Ext.Array.each(velocities_to_average, function(this_velocity) {
+                if (this_velocity > best_velocity) {
+                    best_velocity = this_velocity;
+                }
+            });
+            velocity = best_velocity;
+            this._log(["best", velocity_hash, velocities, velocities_to_average, velocity]);
         }
         return velocity;
     },
+
     // Function to find worst historical sprint velocity for use in forecasting
     _determineWorstHistoricalActualVelocity: function(velocity_hash) {
         var velocity = null;
-        
+
         var velocities = [];
         for ( var i in velocity_hash ) {
             velocities.push(velocity_hash[i]);
         }
-        
+
         if ( velocities.length > 0 ) {
             velocities.sort();
             var velocities_to_average = velocities;
-            if ( velocities.length >= 3 ) {
-                velocities_to_average = Ext.Array.slice(velocities,0,3);
-            }
-            
-            velocity = Ext.Array.mean(velocities_to_average);
-            this._log(["worst",velocity_hash,velocities,velocities_to_average,velocity]);
+            var worst_velocity = this._really_big_number;
+            Ext.Array.each(velocities_to_average, function(this_velocity) {
+                if (this_velocity < worst_velocity) {
+                    worst_velocity = this_velocity;
+                }
+            });
+            velocity = worst_velocity;
+            this._log(["worst", velocity_hash, velocities,velocities_to_average, velocity]);
         }
         return velocity;
     },
+
     _finished_all_asynchronous_calls: function() {
         var proceed = true;
         if (!this._asynch_return_flags["flows"]) {
@@ -679,6 +691,51 @@ Ext.define('CustomApp', {
         return proceed;
     },
 
+    _getPlotLines: function(data) {
+        var plotlines = [];
+        if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex ) {
+            plotlines = [
+                {
+                    color: '#0a0',
+                    width: 2,
+                    value: data.ProjectedFinishPessimisticIndex,
+                    label: {
+                        text: 'Projected Finish',
+                        style: {
+                            color: '#a00'
+                        }
+                    }
+                }
+            ];
+        } else {
+            plotlines = [
+                {
+                    color: '#a00',
+                    width: 2,
+                    value: data.ProjectedFinishPessimisticIndex,
+                    label: {
+                        text: 'Pessimistic Projected Finish',
+                        style: {
+                            color: '#a00'
+                        }
+                    }
+                },
+                {
+                    color: '#0a0',
+                    width: 2,
+                    value: data.ProjectedFinishOptimisticIndex,
+                    label: {
+                        text: 'Optimistic Projected Finish',
+                        style: {
+                            color: '#0a0'
+                        }
+                    }
+                }
+            ];
+        }
+        return plotlines;
+    },
+
     _makeChart: function() {
         var me = this;
         this._log("_makeChart");
@@ -697,7 +754,7 @@ Ext.define('CustomApp', {
                 }
 
                 var chart_hash = this._chart_data;
-                
+
                 this._log(chart_hash);
                 this._chart = this.down('#chart_box').add({
                     xtype: 'rallychart',
@@ -787,50 +844,6 @@ Ext.define('CustomApp', {
         }
     },
 
-    _getPlotLines: function(data) {
-        var plotlines = [];
-        if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex ) {
-            plotlines = [
-                            {
-                                color: '#0a0',
-                                width: 2,
-                                value: data.ProjectedFinishPessimisticIndex,
-                                label: {
-                                    text: 'Projected Finish',
-                                    style: {
-                                        color: '#a00'
-                                    }
-                                }
-                            }
-                        ];
-        } else {
-            plotlines = [
-                            {
-                                color: '#a00',
-                                width: 2,
-                                value: data.ProjectedFinishPessimisticIndex,
-                                label: {
-                                    text: 'Pessimistic Projected Finish',
-                                    style: {
-                                        color: '#a00'
-                                    }
-                                }
-                            },
-                            {
-                                color: '#0a0',
-                                width: 2,
-                                value: data.ProjectedFinishOptimisticIndex,
-                                label: {
-                                    text: 'Optimistic Projected Finish',
-                                    style: {
-                                        color: '#0a0'
-                                    }
-                                }
-                            }
-                        ];
-        }
-        return plotlines;
-    },
     _noIterationsNotify: function() {
         this._chart = this.down('#chart_box').add({
             xtype: 'container',
