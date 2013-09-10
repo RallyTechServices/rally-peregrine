@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>deliverycenterreport</title>
+
+    <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function () {
+                Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",launch:function(){addIterationTimeBox(this)},iterationSelected:function(name){console.log(name)}});
+
+            Rally.launchApp('CustomApp', {
+                name:"deliverycenterreport",
+	            parentRepos:""
+            });
+
+        });
+    </script>
+
+
+    <style type="text/css">
+        .app {
+     /* Add app styles here */
+}
+
+    </style>
+    <style type="text/css">
+        
+
+function addIterationTimeBox (app) {
+    var timeboxScope = app.getContext().getTimeboxScope();
+    if(timeboxScope) {
+        var record = timeboxScope.getRecord();
+        var name = record.get('Name');
+        app.iterationSelected(name);
+    } else {
+        
+        var container = Ext.create('Ext.container.Container', {
+            itemId : 'iterationDropDown',
+            columnWidth : 2
+        });
+        app.add( container );
+        // add the iteration dropdown selector
+        app.down("#iterationDropDown").add( {
+            xtype: 'rallyiterationcombobox',
+            itemId : 'iterationSelector',
+            listeners: {
+                    select: app.iterationSelected(),
+                    ready:  app.iterationSelected(),
+                    scope: app
+            }
+        });
+    }
+}
+
+    </style>
+</head>
+<body></body>
+</html>

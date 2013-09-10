@@ -1,0 +1,23 @@
+deliverycenterreport
+=========================
+
+## Overview
+
+1. Identify the scrum teams. 
+2. Choose up to 3 most recent completed iterations.
+3. For each of the 3 iterations show the 
+    - # of stories planned.
+    - # completed (but not accepted)
+    - # accepted
+    - planned velocity
+    - velocity ( accepted as % of planned, red if < 80%)
+    - Identify the special story
+    - - delivery satisfaction
+    - - remarks
+    - - status
+    - 
+
+
+## License
+
+AppTemplate is released under the MIT license.  See the file [LICENSE](https://raw.github.com/RallyApps/AppTemplate/master/LICENSE) for the full text.
