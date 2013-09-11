@@ -34,8 +34,10 @@ Ext.define('CustomApp', {
             var iterations = projectIterations[key];
             // filter to just those ones ended before today
             iterations = _.filter(iterations, function(iteration) {
-                return that._toDate(iteration.get("EndDate") < today );
+                var enddate = that._toDate(iteration.get("EndDate"));
+                return( enddate < today );
             });
+            
             // now sort descending by enddate
             iterations = _.sortBy(iterations, function(iteration) {
                 return that._toDate(iteration.get("EndDate"));
@@ -47,10 +49,49 @@ Ext.define('CustomApp', {
             var iterationIds = _.pluck(iterations,function(i){return i.get("ObjectID")});
             
             async.map(iterations, that.getIterationResults, function(err,results){
-                that.process(key,iterations,results);
+                // console.log("results",results);
+                // that.process(key,iterations,results);
+                async.map(iterations,that.getSpecialStory,function(err,stories){
+                  that.process(key,iterations,results,stories);
+                });
             });
             
         });
+    },
+    
+    getSpecialStory : function( iteration, callback) {
+        var that = this;
+        Ext.create('Rally.data.WsapiDataStore', {
+            limit : 'Infinity',
+            autoLoad : true,
+            model: 'HierarchicalRequirement',
+            filters: [
+                {
+                    property: 'Iteration.ObjectID',
+                    operator : "=",
+                    value: iteration.get("ObjectID")
+                },
+                {
+                    property: 'Tags.Name',
+                    operator : "contains",
+                    value: 'Special'
+                }
+            ],
+            listeners: {
+                load: function(store, data, success) {
+                    callback(null,data);
+                },
+                scope : that
+            },
+            sorters: [
+                {
+                    property: 'CreationDate',
+                    direction: 'ASC'
+                }
+            ],
+            fetch: ['FormattedID', 'Name', 'PlanEstimate','ScheduleState','CreationDate']
+        });
+        
     },
 
     getIterationResults : function(iteration,callback) {
@@ -110,8 +151,9 @@ Ext.define('CustomApp', {
     // Team Name, Iteration Name, Total Points, Completed Count, Accepted Count, Planned Velocity, Velocity
     // Del Sat, Rem, Status
 
-    process : function( team, iterations, results) {
+    process : function( team, iterations, results, stories) {
         var that = this;
+        console.log("stories",stories);
         
         _.each(iterations,function(iteration,x) {
             // group the cumulative flow records by creation date (we want to get the last da)
