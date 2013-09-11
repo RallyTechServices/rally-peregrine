@@ -1,6 +1,13 @@
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    defaults: { padding: 10, margin: 5 },
+
+    // Title/version
+    title: 'Lean Project Charter/Releae Predictability',
+    version: '0.30',
+
+    // Global variables
     _debug: true,
     _release_combo_box: null,
     _target_backlog_number_box: null,
@@ -21,7 +28,8 @@ Ext.define('CustomApp', {
     _target_backlog: 0,
     _really_big_number: 1000000000000000,
     _chart_data: null,
-    defaults: { padding: 10, margin: 5 },
+
+    // Layout items
     items: [
         {
             xtype: 'container',
@@ -854,6 +862,7 @@ Ext.define('CustomApp', {
                     cumulative_pessimistic_velocity = pessimistic_velocity_adder;
                 }
             }
+
             data.OptimisticProjectedVelocity.push(cumulative_optimistic_velocity);
             data.PessimisticProjectedVelocity.push(cumulative_pessimistic_velocity);
         });
@@ -934,7 +943,7 @@ Ext.define('CustomApp', {
                 }
             });
             velocity = worst_velocity;
-            this._log(["worst", velocity_hash, velocities,velocities_to_average, velocity]);
+            this._log(["worst", velocity_hash, velocities, velocities_to_average, velocity]);
         }
         return velocity;
     },
@@ -1110,7 +1119,6 @@ Ext.define('CustomApp', {
                     chartConfig: {
                         chart: {},
                         title: {
-                            text: 'LPC',
                             align: 'center'
                         },
                         yAxis: [
@@ -1141,6 +1149,10 @@ Ext.define('CustomApp', {
                             {
                                 categories: chart_hash.Name,
                                 plotLines: me._getPlotLines(chart_hash),
+                                labels: {
+                                    rotation: -45,
+                                    align: 'right'
+                                }
                             }
                         ]
                     }
