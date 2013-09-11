@@ -224,16 +224,16 @@ Ext.define('CustomApp', {
             // title: 'Defect Density',
             store: this.store,
             columns: [
-                {header: 'Team',  dataIndex: 'team'},
-                { header : "Iteration",dataIndex : "iteration"       },
-                { header : "Story Points",dataIndex : "totalPoints"     }, 
-                { header : "# Completed",dataIndex : "completedCount"  },
-                { header : "Target Velocity",dataIndex : "plannedVelocity" }, 
-                { header : "# Accepted",dataIndex : "acceptedCount"   },
-                { header : "Velocity",dataIndex : "velocity"        },
-                { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction"},
-                { header : "Remarks",dataIndex : "remarks"         },
-                { header : "Status",dataIndex : "status"          }
+                { header : 'Team',           dataIndex: 'team'},
+                { header : "Iteration",      dataIndex : "iteration"       },
+                { header : "Story Points",   dataIndex : "totalPoints",      align : "center"}, 
+                { header : "# Completed",    dataIndex : "completedCount",   align : "center"}, 
+                { header : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"}, 
+                { header : "# Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
+                { header : "Velocity",       dataIndex : "velocity",         align : "center"}, 
+                { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center"}, 
+                { header : "Remarks",        dataIndex : "remarks",          align : "center"}, 
+                { header : "Status",         dataIndex : "status",           align : "center"}, 
             ]
         });
         
