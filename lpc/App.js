@@ -149,8 +149,10 @@ Ext.define('CustomApp', {
                         }
                     });
                     console.log('_findAlignedReleases: me._aligned_release_oids: ', me._aligned_release_oids);
+                    me._asynch_return_flags["aligned_releases"] = true;
                     me._findTodaysReleaseBacklog();
                     me._findReleaseBacklogAtEachIteration();
+                    me._makeChart();
                 }
             }
         });
@@ -253,7 +255,13 @@ Ext.define('CustomApp', {
                     -- */
 
                     me._asynch_return_flags["current_iteration"] = true;
-                    me._findAlignedReleases();
+                    if (me._child_project_count > 0) {
+                        me._findAlignedReleases();
+                    } else {
+                        me._asynch_return_flags["aligned_releases"] = true;
+                        me._findTodaysReleaseBacklog();
+                        me._findReleaseBacklogAtEachIteration();
+                    }
                     me._makeChart();
                 }
             }
@@ -330,7 +338,8 @@ Ext.define('CustomApp', {
                             }
                         }
                     });
-                    me._asynch_return_flags["iterations"] = true;
+                    me._asynch_return_flags["aligned_iterations"] = true;
+                    console.log("me._asynch_return_flags['aligned_iterations']: ", me._asynch_return_flags["aligned_iterations"]);
                     me._findAcceptedItemsInEachIteration();
                     me._findCurrentIteration();
                     me._makeChart();
@@ -405,11 +414,12 @@ Ext.define('CustomApp', {
                         me._aligned_iteration_oids.push(iteration_oid);
                     });
                     me._log(['me._iterations: ', me._iterations]);
+
                     if (me._iterations.length > 0) {
                         if (me._child_project_count > 0) {
                             me._findAlignedIterations();
                         } else {
-                            me._asynch_return_flags["iterations"] = true;
+                            me._asynch_return_flags["aligned_iterations"] = true;
                             me._findReleaseBacklogAtEachIteration();
                             me._findAcceptedItemsInEachIteration();
                             me._findCurrentIteration();
@@ -418,6 +428,8 @@ Ext.define('CustomApp', {
                     } else {
                         me._noIterationsNotify();
                     }
+
+                    me._asynch_return_flags["iterations"] = true;
                 }
             }
         });
@@ -781,7 +793,7 @@ Ext.define('CustomApp', {
 
         // Add in the backlog target line and projected finish lines
         if (me._target_backlog === 0) {
-            me._log("MRB", data.MostRecentBacklog);
+            console.log("MRB", data.MostRecentBacklog);
             me._target_backlog = data.MostRecentBacklog;
             me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
@@ -957,6 +969,14 @@ Ext.define('CustomApp', {
             this._log("Not yet received today's defect backlog");
             proceed = false;
         }
+        if (!this._asynch_return_flags["aligned_releases"]) {
+            this._log("Not yet received aligned releases");
+            proceed = false;
+        }
+        if (!this._asynch_return_flags["aligned_iterations"]) {
+            this._log("Not yet received aligned iterations");
+            proceed = false;
+        }
         return proceed;
     },
 
@@ -1008,6 +1028,7 @@ Ext.define('CustomApp', {
     _makeChart: function() {
         var me = this;
         this._log("_makeChart");
+
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
@@ -1017,9 +1038,14 @@ Ext.define('CustomApp', {
             } else {
                 this._assembleSprintData();
 
-                // Only project if selected Release is current
+                // Only project if selected Release is current and we have velocity
+                // history to use in projection
                 if (this._isSelectedReleaseCurrent() && this._areBestWorstVelocityNonZero()) {
                     this._assembleProjectedData();
+                }
+
+                if ( this._chart ) {
+                    this._chart.destroy();
                 }
 
                 var chart_hash = this._chart_data;
@@ -1087,25 +1113,36 @@ Ext.define('CustomApp', {
                             text: 'LPC',
                             align: 'center'
                         },
-                        yAxis: [{
-                            plotLines: [
-                                {
-                                    color: '#000',
-                                    width: 2,
-                                    value: this._target_backlog,
-                                    label: {
-                                        text: 'Target Backlog (Points)',
-                                        style: {
-                                            color: '#000'
+                        yAxis: [
+                            {
+                                title: {
+                                    enabled: true,
+                                    text: 'Story Points',
+                                    style: {
+                                        fontWeight: 'normal'
+                                    }
+                                },
+                                plotLines: [
+                                    {
+                                        color: '#000',
+                                        width: 2,
+                                        value: this._target_backlog,
+                                        label: {
+                                            text: 'Target Backlog (Points)',
+                                            style: {
+                                                color: '#000'
+                                            }
                                         }
                                     }
-                                }
-                            ]
-                        }],
-                        xAxis: [{
-                            categories: chart_hash.Name,
-                            plotLines: me._getPlotLines(chart_hash)
-                        }]
+                                ]
+                            }
+                        ],
+                        xAxis: [
+                            {
+                                categories: chart_hash.Name,
+                                plotLines: me._getPlotLines(chart_hash),
+                            }
+                        ]
                     }
                 });
                 this._chart.setChartColors(['#B5D8EB','#5C9ACB','#6ab17d','#f47168']);
