@@ -19,7 +19,13 @@
                 _release_combo_box: null,
                 _target_backlog_number_box: null,
                 _release: null,
+                _project: null,
+                _child_project_count: null,
                 _iterations: [],
+                _iteration_hash: {},
+                _aligned_iteration_oids: [],
+                _releases: [],
+                _aligned_release_oids: [],
                 _current_iteration: null,
                 _current_iteration_index: null,
                 _release_flow_hash: {},
@@ -52,7 +58,8 @@
                 _kickOff: function() {
                     this._asynch_return_flags = {};
                     this._release = this._release_combo_box.getRecord();
-                    this._findIterationsBetweenDates();
+                    console.log('_kickOff: this._release: ', this._release);
+                    this._findChildProjects();
                 },
             
                 _addReleaseSelector: function() {
@@ -91,6 +98,98 @@
                             me._kickOff();
                         }
                     });
+                },
+            
+                _findChildProjects: function() {
+            
+                    var me = this;
+            
+                    var project = this.getContext().getProject();
+                    var project_oid = project.ObjectID;
+                    var project_model = Rally.data.ModelFactory.getModel({
+                        type: 'Project',
+                        success: function(model) {
+                            model.load(project_oid, {
+                                fetch: ['Name', 'Children'],
+                                callback: function(result, operation) {
+                                    if(operation.wasSuccessful()) {
+                                        me._project = result;
+                                        me._child_project_count = result.get('Children').Count;
+                                    }
+                                    me._findIterationsBetweenDates();
+                                }
+                            });
+                        }
+                    });
+                },
+            
+                // Gets list of all Releases that match timebox of selected release
+                // Calls _findTodaysReleaseBacklog when done
+                _findAlignedReleases: function() {
+            
+                    var me = this;
+            
+                    var this_release = this._release_combo_box.getRecord();
+                    var this_release_name = this_release.get('Name');
+                    var this_release_oid = this_release.get('ObjectID');
+                    me._aligned_release_oids.push(this_release_oid);
+            
+                    var release_query = [
+                        { property: "Name", operator:"=", value: this_release_name },
+                    ];
+            
+                    var release_store = Ext.create('Rally.data.WsapiDataStore', {
+                        model: 'Release',
+                        autoLoad: true,
+                        filters: release_query,
+                        sorters: [
+                            {
+                                property: 'ReleaseDate',
+                                direction: 'ASC'
+                            }
+                        ],
+                        fetch: [ 'ObjectID', 'Name', 'PlannedVelocity', 'ReleaseStartDate', 'ReleaseDate'],
+                        context: { projectScopeDown: true },
+                        listeners: {
+                            scope: this,
+                            load: function(store, records) {
+                                Ext.Array.each(records, function(release) {
+                                    var release_oid = release.get('ObjectID');
+                                    // Make sure it's a child release and isn't already in the list
+                                    if (me._aligned_release_oids.indexOf(release_oid) === -1) {
+                                        if (me._checkReleaseAlignment(release)) {
+                                            me._aligned_release_oids.push(release_oid);
+                                        }
+                                    }
+                                });
+                                console.log('_findAlignedReleases: me._aligned_release_oids: ', me._aligned_release_oids);
+                                me._findTodaysReleaseBacklog();
+                                me._findReleaseBacklogAtEachIteration();
+                            }
+                        }
+                    });
+                },
+            
+                // Check to see if two Release Timeboxes align
+                _checkReleaseTimebox: function(parent_release, release) {
+            
+                    var parent_start_date = parent_release.get('ReleaseStartDate');
+                    var parent_release_date = parent_release.get('ReleaseDate');
+                    var start_date = release.get('ReleaseStartDate');
+                    var release_date = release.get('ReleaseDate');
+            
+                    return (start_date.getTime() === parent_start_date.getTime() &&
+                            release_date.getTime() === parent_release_date.getTime());
+                },
+            
+                // Check to see if Release Timebox aligns with that of Top-level Release
+                _checkReleaseAlignment: function(release) {
+                    var parent_release = this._release;
+                    if (parent_release) {
+                        return this._checkReleaseTimebox(parent_release, release);
+                    } else {
+                        return false;
+                    }
                 },
             
                 _findCurrentIteration: function() {
@@ -168,7 +267,7 @@
                                 -- */
             
                                 me._asynch_return_flags["current_iteration"] = true;
-                                me._findTodaysReleaseBacklog();
+                                me._findAlignedReleases();
                                 me._makeChart();
                             }
                         }
@@ -176,7 +275,102 @@
             
                 },
             
-                _findIterationsBetweenDates: function(  ) {
+                // Check to see if two Iteration Timeboxes align
+                _checkIterationTimebox: function(parent_iteration, iteration) {
+                    var parent_start_date = parent_iteration.get('StartDate');
+                    var parent_end_date = parent_iteration.get('EndDate');
+                    var start_date = iteration.get('StartDate');
+                    var end_date = iteration.get('EndDate');
+            
+                    return (start_date.getTime() === parent_start_date.getTime() &&
+                            end_date.getTime() === parent_end_date.getTime());
+                },
+            
+                // Check to see if Iteration Timebox aligns with that of Parent Iteration
+                _checkIterationAlignment: function(iteration) {
+                    var iteration_name = iteration.get('Name');
+                    var parent_iteration = this._iteration_hash[iteration_name];
+                    if (parent_iteration) {
+                        return this._checkIterationTimebox(parent_iteration, iteration);
+                    } else {
+                        return false;
+                    }
+                },
+            
+                // If we're aggregating data from child projects, make sure that their
+                // Iteration timeboxes line up with Iterations in top-scoped Project
+                _findAlignedIterations: function() {
+            
+                    var me = this;
+            
+                    // Run the same query as _findIterationsBetweenDates(), but with projectScopeDown = true
+            
+                    // dates are given in JS, but we need them to be ISO
+                    // Rally.util.DateTime.toIsoString(date, true); will return a date in UTC
+                    var start_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseStartDate'), true);
+                    var end_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseDate'), true);
+                    this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
+            
+                    var iteration_query = [
+                        { property: "StartDate", operator:">=", value: start_date_iso },
+                        // Changed to StartDate for high end of query since Philips expects to
+                        // see any Iteration that "touches" a Release be included
+                        { property: "StartDate", operator:"<=", value: end_date_iso }
+                    ];
+            
+                    // Start out by grabbing Iterations at current project-level only
+                    // If we have child projects, then we'll get child iterations later
+                    var iteration_store = Ext.create('Rally.data.WsapiDataStore', {
+                        model: 'Iteration',
+                        autoLoad: true,
+                        filters: iteration_query,
+                        sorters: [
+                            {
+                                property: 'EndDate',
+                                direction: 'ASC'
+                            }
+                        ],
+                        fetch: [ 'ObjectID', 'Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
+                        context: { projectScopeDown: true },
+                        listeners: {
+                            scope: this,
+                            load: function(store, records) {
+                                Ext.Array.each(records, function(iteration) {
+                                    var iteration_oid = iteration.get('ObjectID');
+                                    // Make sure it's a child iteration and isn't already in the list
+                                    if (me._aligned_iteration_oids.indexOf(iteration_oid) === -1) {
+                                        if (me._checkIterationAlignment(iteration)) {
+                                            me._aligned_iteration_oids.push(iteration_oid);
+                                        }
+                                    }
+                                });
+                                me._asynch_return_flags["iterations"] = true;
+                                me._findAcceptedItemsInEachIteration();
+                                me._findCurrentIteration();
+                                me._makeChart();
+                            }
+                        }
+                    });
+            
+                },
+            
+                // Checks to see if an iteration is aligned with a Parent Project Iteration
+                _isAligned: function(iteration) {
+            
+                    var me = this;
+            
+                    var iteration_ref = Ext.create('Rally.util.Ref', iteration._ref);
+                    var iteration_oid = iteration_ref.getOid();
+                    var is_aligned = false;
+                    if (me._aligned_iteration_oids.indexOf(iteration_oid) !== -1) {
+                        is_aligned = true;
+                    } else {
+                        is_aligned = false;
+                    }
+                    return is_aligned;
+                },
+            
+                _findIterationsBetweenDates: function() {
             
                     var me = this;
             
@@ -200,7 +394,9 @@
                         { property: "StartDate", operator:"<=", value: end_date_iso }
                     ];
             
-                    var iteration_store = Ext.create('Rally.data.WsapiDataStore',{
+                    // Start out by grabbing Iterations at current project-level only
+                    // If we have child projects, then we'll get child iterations later
+                    var iteration_store = Ext.create('Rally.data.WsapiDataStore', {
                         model: 'Iteration',
                         autoLoad: true,
                         filters: iteration_query,
@@ -210,19 +406,29 @@
                                 direction: 'ASC'
                             }
                         ],
-                        fetch: ['Name','PlannedVelocity','EndDate'],
+                        fetch: ['ObjectID', 'Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
                         context: { projectScopeDown: false },
                         listeners: {
                             scope: this,
                             load: function(store, records) {
                                 me._iterations = records;
+                                Ext.Array.each(records, function(iteration) {
+                                    var iteration_name = iteration.get('Name');
+                                    var iteration_oid = iteration.get('ObjectID');
+                                    me._iteration_hash[iteration_name] = iteration;
+                                    me._aligned_iteration_oids.push(iteration_oid);
+                                });
                                 me._log(['me._iterations: ', me._iterations]);
                                 if (me._iterations.length > 0) {
-                                    me._asynch_return_flags["iterations"] = true;
-                                    me._findReleaseBacklogAtEachIteration();
-                                    me._findAcceptedItemsInEachIteration();
-                                    me._findCurrentIteration();
-                                    me._makeChart();
+                                    if (me._child_project_count > 0) {
+                                        me._findAlignedIterations();
+                                    } else {
+                                        me._asynch_return_flags["iterations"] = true;
+                                        me._findReleaseBacklogAtEachIteration();
+                                        me._findAcceptedItemsInEachIteration();
+                                        me._findCurrentIteration();
+                                        me._makeChart();
+                                    }
                                 } else {
                                     me._noIterationsNotify();
                                 }
@@ -248,19 +454,24 @@
                         autoLoad: true,
                         filters: iteration_query,
                         fetch:['Name', 'PlanEstimate', 'Iteration'],
-                        context: { projectScopeDown: false },
+                        context: { projectScopeDown: true },
                         listeners:{
                             scope: this,
                             load: function(store, records) {
                                 Ext.Array.each(records, function(record) {
                                     if ( record.get('Iteration') ) {
-                                        var iteration_name = record.get('Iteration').Name;
-                                        if ( record.get('PlanEstimate') ) {
-                                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                                me._log("clearing velocity for " + iteration_name);
-                                                me._velocities[iteration_name] = 0;
+                                        var iteration = record.get('Iteration');
+            
+                                        // Check if Object's Iteration aligns with a Parent Project Iteration
+                                        if (me._isAligned(iteration)) {
+                                            var iteration_name = record.get('Iteration').Name;
+                                            if ( record.get('PlanEstimate') ) {
+                                                if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                                    me._log("clearing velocity for " + iteration_name);
+                                                    me._velocities[iteration_name] = 0;
+                                                }
+                                                me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                             }
-                                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                         }
                                     }
                                 });
@@ -275,19 +486,23 @@
                         autoLoad: true,
                         filters: iteration_query,
                         fetch:['Name', 'PlanEstimate', 'Iteration'],
-                        context: { projectScopeDown: false },
+                        context: { projectScopeDown: true },
                         listeners:{
                             scope: this,
                             load: function(store, records) {
                                 Ext.Array.each(records, function(record){
                                     if ( record.get('Iteration') ) {
-                                        var iteration_name = record.get('Iteration').Name;
-                                        if ( record.get('PlanEstimate') ) {
-                                            if (typeof(me._velocities[iteration_name]) == 'undefined') {
-                                                me._log("clearing velocity for " + iteration_name);
-                                                me._velocities[iteration_name] = 0;
+                                        var iteration = record.get('Iteration');
+                                        // Check if Object's Iteration aligns with a Parent Project Iteration
+                                        if (me._isAligned(iteration)) {
+                                            var iteration_name = record.get('Iteration').Name;
+                                            if ( record.get('PlanEstimate') ) {
+                                                if (typeof(me._velocities[iteration_name]) == 'undefined') {
+                                                    me._log("clearing velocity for " + iteration_name);
+                                                    me._velocities[iteration_name] = 0;
+                                                }
+                                                me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                             }
-                                            me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
                                         }
                                     }
                                 });
@@ -316,24 +531,51 @@
                         // Initialize today's cumulative flow data with yesterday's
                         me._release_flow_hash[this_iteration_end_iso_string] = 0;
             
-                        var release_today_query = [
-                            { property: "Release.ObjectID", operator: "=", value: this_release }
-                        ];
+                        var release_filters = Ext.create('Rally.data.QueryFilter', {
+                            property: 'Release.ObjectID',
+                            operator: '=',
+                            value: this_release
+                        });
+            
+                        // Add child releases into query scoping
+                        if (me._child_project_count > 0) {
+                            Ext.Array.each(me._aligned_release_oids, function(release_oid) {
+                                if (release_oid !== this_release) {
+                                    var this_filter = Ext.create('Rally.data.QueryFilter', {
+                                        property: 'Release.ObjectID',
+                                        operator: '=',
+                                        value: release_oid
+                                    });
+            
+                                    if (!release_filters) {
+                                        release_filters = this_filter;
+                                    } else {
+                                        release_filters = release_filters.or(this_filter);
+                                    }
+                                }
+                            });
+                        }
             
                         // Do a non-flow query for Work Products assigned to the Release
                         // include them on the backlog line
                         Ext.create('Rally.data.WsapiDataStore', {
                             model:'UserStory',
                             autoLoad: true,
-                            filters: release_today_query,
-                            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
-                            context: { projectScopeDown: false },
+                            filters: release_filters,
+                            fetch:['Name', 'PlanEstimate', 'Release', 'Iteration', 'CreationDate'],
+                            context: { projectScopeDown: true },
                             listeners:{
                                 scope: this,
                                 load: function(store, records) {
                                     Ext.Array.each(records, function(record) {
-                                        if ( record.get('PlanEstimate') ) {
-                                            me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                        var release = record.get('Release');
+                                        var iteration = record.get('Iteration');
+                                        // and we're not scheduled into an iteration
+                                        if ( record.get('PlanEstimate') && !iteration) {
+                                            // Check if Object's Release aligns with a Parent Project Release
+                                            if (me._isAligned(release)) {
+                                                me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                            }
                                         }
                                     });
                                     this._asynch_return_flags["story_backlog_today"] = true;
@@ -345,15 +587,20 @@
                         Ext.create('Rally.data.WsapiDataStore',{
                             model:'Defect',
                             autoLoad: true,
-                            filters: release_today_query,
-                            fetch:['Name', 'PlanEstimate', 'Release', 'CreationDate'],
-                            context: { projectScopeDown: false },
+                            filters: release_filters,
+                            fetch:['Name', 'PlanEstimate', 'Release', 'Iteration', 'CreationDate'],
+                            context: { projectScopeDown: true },
                             listeners:{
                                 scope: this,
                                 load: function(store, records) {
                                     Ext.Array.each(records, function(record) {
-                                        if ( record.get('PlanEstimate') ) {
-                                            me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                        var release = record.get('Release');
+                                        var iteration = record.get('Iteration');
+                                        if ( record.get('PlanEstimate') && !iteration ) {
+                                            // Check if Object's Release aligns with a Parent Project Release
+                                            if (me._isAligned(release)) {
+                                                me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                            }
                                         }
                                     });
                                     this._asynch_return_flags["defect_backlog_today"] = true;
@@ -378,17 +625,40 @@
             
                 _findReleaseBacklogAtEachIteration: function() {
                     var me = this;
-                    this._release_flow = []; // in order of sprint end
+                    me._release_flow = []; // in order of sprint end
             
-                    var release_check = Ext.create('Rally.data.QueryFilter',{
-                        property:'ReleaseObjectID',
-                        value:this._release.get('ObjectID')
+                    var this_release = me._release;
+                    var this_release_oid = this_release.get('ObjectID');
+            
+                    var release_filters = Ext.create('Rally.data.QueryFilter', {
+                            property: 'ReleaseObjectID',
+                            operator: "=",
+                            value: this_release_oid
                     });
+            
+                    // Add child releases into query scoping
+                    if (me._child_project_count > 0) {
+                        Ext.Array.each(me._aligned_release_oids, function(release_oid) {
+                            if (release_oid !== this_release_oid) {
+                                var this_filter = Ext.create('Rally.data.QueryFilter', {
+                                    property: 'ReleaseObjectID',
+                                    operator: '=',
+                                    value: release_oid
+                                });
+            
+                                if (!release_filters) {
+                                    release_filters = this_filter;
+                                } else {
+                                    release_filters = release_filters.or(this_filter);
+                                }
+                            }
+                        });
+                    }
             
                     Ext.create('Rally.data.WsapiDataStore',{
                         model: 'ReleaseCumulativeFlowData',
                         autoLoad: true,
-                        filters: release_check,
+                        filters: release_filters,
                         limit: 5000,
                         listeners: {
                             scope: this,
@@ -401,7 +671,6 @@
                                     var capture_date = Rally.util.DateTime.toIsoString(
                                         adjusted_card_creation_date, true
                                     ).replace(/T.*$/,"");
-                                    // me._doubleLineLog("capture_date:", capture_date);
             
                                     var plan_estimate = card.get('CardEstimateTotal');
                                     // me._doubleLineLog("plan_estimate", plan_estimate)
@@ -467,7 +736,7 @@
                     var number_iterations = me._iterations.length;
                     var current_iteration_index = me._current_iteration_index;
             
-                    Ext.Array.each(me._iterations, function(iteration,iteration_index) {
+                    Ext.Array.each(me._iterations, function(iteration, iteration_index) {
             
                         var this_end_date = iteration.get('EndDate');
                         data.IterationEndDate.push(this_end_date);
