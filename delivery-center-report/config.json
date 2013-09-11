@@ -4,10 +4,10 @@
    "server": "https://rally1.rallydev.com",
    "sdk": "2.0rc1",
    "javascript": [
-      "App.js"
+      "App.js",
+      "iterations.js"
    ],
    "css": [
-      "app.css",
-      "iterations.js"
+      "app.css"
    ]
 }

@@ -1,5 +1,8 @@
 //     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
 
+var FIELD_DELIVERY_SATISFACTION = "DeliverySatisfaction";
+var FIELD_REMARKS               = "Remarks";
+var FIELD_STATUS                = "Status";
 
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
@@ -7,6 +10,8 @@ Ext.define('CustomApp', {
 
     launch: function() {
         // addIterationTimeBox(this);
+        this.rows = [];
+        this.showTable();
         getIterations(this);
     },
     
@@ -25,7 +30,7 @@ Ext.define('CustomApp', {
 
         var projectIterations = _.groupBy(data, function(iteration) {
             var project = iteration.get("Project");
-            var name = project["Name"];
+            var name = project.Name;
             return name;
         });
         
@@ -42,11 +47,14 @@ Ext.define('CustomApp', {
             iterations = _.sortBy(iterations, function(iteration) {
                 return that._toDate(iteration.get("EndDate"));
             });
-            // finally we only want the last 3
+            // we only want the last 3
             iterations = iterations.length <= 3 ? iterations :
                 iterations.slice(-3);
+            
+            // finally reverse so the latest is at the top.
+            iterations = iterations.reverse();
 
-            var iterationIds = _.pluck(iterations,function(i){return i.get("ObjectID")});
+            var iterationIds = _.pluck(iterations,function(i){return i.get("ObjectID");});
             
             async.map(iterations, that.getIterationResults, function(err,results){
                 // console.log("results",results);
@@ -55,8 +63,8 @@ Ext.define('CustomApp', {
                   that.process(key,iterations,results,stories);
                 });
             });
-            
         });
+
     },
     
     getSpecialStory : function( iteration, callback) {
@@ -96,10 +104,6 @@ Ext.define('CustomApp', {
 
     getIterationResults : function(iteration,callback) {
         var that = this;
-        // var result = iteration;
-        // setTimeout(function(){
-        //     callback(null, result);
-        // }, 200);
         Ext.create('Rally.data.WsapiDataStore', {
             limit : 'Infinity',
             autoLoad : true,
@@ -157,7 +161,7 @@ Ext.define('CustomApp', {
         
         _.each(iterations,function(iteration,x) {
             // group the cumulative flow records by creation date (we want to get the last da)
-            var gcfd = _.groupBy(results[x],function(cfd){return cfd.get("CreationDate")});
+            var gcfd = _.groupBy(results[x],function(cfd){return cfd.get("CreationDate");});
             // get records for the last day
             var lcfd = gcfd[ _.last(_.keys(gcfd))];
             // sum by state
@@ -173,8 +177,68 @@ Ext.define('CustomApp', {
             var completedCount = that.countForState(lcfd,"Completed");
             
             console.log(team,iteration.get("Name"),results[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
+            
+            var specialStory = stories[x] !== null && stories[x].length > 0 ? stories[x][0] : null;
+            
+            var plannedVelocity = iteration.get("PlannedVelocity");
+            console.log("pv",plannedVelocity);
+            
+            // add a row for each team, iteration combination
+            var row = { team            : team, 
+                        iteration       : iteration.get("Name"), 
+                        totalPoints     : total, 
+                        completedCount  : completedCount,
+                        plannedVelocity : plannedVelocity, 
+                        acceptedCount   : acceptedCount,
+                        velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
+                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
+                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
+                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : ""
+            };
+            that.rows.push(row);
+            that.store.load();
+        });
+    },
+    
+    showTable : function() {
+        console.log("rows",this.rows);
+        // a store from the array of items
+        this.store = Ext.create('Ext.data.Store', {
+            fields: [
+                    { name : "team" ,          type : "string"},
+                    { name : "iteration" ,     type : "string"},
+                    { name : "totalPoints",    type : "number"}, 
+                    { name : "completedCount", type  : "number"},
+                    { name : "plannedVelocity",type : "number"}, 
+                    { name : "acceptedCount",  type : "number"},
+                    { name : "velocity",       type : "number"},
+                    { name : "deliverySatisfaction", type : "string"},
+                    { name : "remarks",        type : "string"},
+                    { name : "status",         type : "string"}
+            ],
+            data : this.rows
+        });
+
+        // create the grid
+        this.grid = Ext.create('Ext.grid.Panel', {
+            // title: 'Defect Density',
+            store: this.store,
+            columns: [
+                {header: 'Team',  dataIndex: 'team'},
+                { header : "Iteration",dataIndex : "iteration"       },
+                { header : "Story Points",dataIndex : "totalPoints"     }, 
+                { header : "# Completed",dataIndex : "completedCount"  },
+                { header : "Target Velocity",dataIndex : "plannedVelocity" }, 
+                { header : "# Accepted",dataIndex : "acceptedCount"   },
+                { header : "Velocity",dataIndex : "velocity"        },
+                { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction"},
+                { header : "Remarks",dataIndex : "remarks"         },
+                { header : "Status",dataIndex : "status"          }
+            ]
         });
         
+        // add it to the app
+        this.add(this.grid);    
     }
 
 });

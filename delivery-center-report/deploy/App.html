@@ -2,12 +2,13 @@
 <html>
 <head>
     <title>deliverycenterreport</title>
-
     <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function () {
-                Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",launch:function(){addIterationTimeBox(this)},iterationSelected:function(name){console.log(name)}});
+                var FIELD_DELIVERY_SATISFACTION="DeliverySatisfaction",FIELD_REMARKS="Remarks",FIELD_STATUS="Status";Ext.define("CustomApp",{extend:"Rally.app.App",componentCls:"app",launch:function(){this.rows=[],this.showTable(),getIterations(this)},iterationSelected:function(name){console.log(name)},_toDate:function(ds){return new Date(Date.parse(ds))},iterations:function(data){var that=this,today=new Date;console.log("iterations",data.length);var projectIterations=_.groupBy(data,function(iteration){var project=iteration.get("Project"),name=project.Name;return name});_.each(_.keys(projectIterations),function(key){console.log("team",key);var iterations=projectIterations[key];iterations=_.filter(iterations,function(iteration){var enddate=that._toDate(iteration.get("EndDate"));return today>enddate}),iterations=_.sortBy(iterations,function(iteration){return that._toDate(iteration.get("EndDate"))}),iterations=3>=iterations.length?iterations:iterations.slice(-3),iterations=iterations.reverse();var iterationIds=_.pluck(iterations,function(i){return i.get("ObjectID")});async.map(iterations,that.getIterationResults,function(err,results){async.map(iterations,that.getSpecialStory,function(err,stories){that.process(key,iterations,results,stories)})})})},getSpecialStory:function(iteration,callback){var that=this;Ext.create("Rally.data.WsapiDataStore",{limit:"Infinity",autoLoad:!0,model:"HierarchicalRequirement",filters:[{property:"Iteration.ObjectID",operator:"=",value:iteration.get("ObjectID")},{property:"Tags.Name",operator:"contains",value:"Special"}],listeners:{load:function(store,data,success){callback(null,data)},scope:that},sorters:[{property:"CreationDate",direction:"ASC"}],fetch:["FormattedID","Name","PlanEstimate","ScheduleState","CreationDate"]})},getIterationResults:function(iteration,callback){var that=this;Ext.create("Rally.data.WsapiDataStore",{limit:"Infinity",autoLoad:!0,model:"IterationCumulativeFlowData",filters:[{property:"IterationObjectID",operator:"=",value:iteration.get("ObjectID")}],listeners:{load:function(store,data,success){callback(null,data)},scope:that},sorters:[{property:"CreationDate",direction:"ASC"}],fetch:["IterationObjectID","CardCount","CardEstimateTotal","CardState","CreationDate"]})},sumForState:function(cfdRecs,state){var recs="*"==state?cfdRecs:_.filter(cfdRecs,function(cfd){return cfd.get("CardState")==state}),sum=_.reduce(recs,function(memo,cfd){return memo+cfd.get("CardEstimateTotal")},0);return sum},countForState:function(cfdRecs,state){var recs="*"==state?cfdRecs:_.filter(cfdRecs,function(cfd){return cfd.get("CardState")==state}),count=_.reduce(recs,function(memo,cfd){return memo+cfd.get("CardCount")},0);return count},process:function(team,iterations,results,stories){var that=this;console.log("stories",stories),_.each(iterations,function(iteration,x){var gcfd=_.groupBy(results[x],function(cfd){return cfd.get("CreationDate")}),lcfd=gcfd[_.last(_.keys(gcfd))],completed=that.sumForState(lcfd,"Completed"),accepted=that.sumForState(lcfd,"Accepted"),backlog=that.sumForState(lcfd,"Backlog"),defined=that.sumForState(lcfd,"Defined"),inprogress=that.sumForState(lcfd,"In-Progress"),total=that.sumForState(lcfd,"*"),totalCount=that.countForState(lcfd,"*"),acceptedCount=that.countForState(lcfd,"Accepted"),completedCount=that.countForState(lcfd,"Completed");console.log(team,iteration.get("Name"),results[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);var specialStory=null!==stories[x]&&stories[x].length>0?stories[x][0]:null,plannedVelocity=iteration.get("PlannedVelocity");console.log("pv",plannedVelocity);var row={team:team,iteration:iteration.get("Name"),totalPoints:total,completedCount:completedCount,plannedVelocity:plannedVelocity,acceptedCount:acceptedCount,velocity:plannedVelocity>0?Math.round(100*(accepted/plannedVelocity)):0,deliverySatisfaction:null!==specialStory?specialStory.get(FIELD_DELIVERY_SATISFACTION):"",remarks:null!==specialStory?specialStory.get(FIELD_REMARKS):"",status:null!==specialStory?specialStory.get(FIELD_STATUS):""};that.rows.push(row),that.store.load()})},showTable:function(){console.log("rows",this.rows),this.store=Ext.create("Ext.data.Store",{fields:[{name:"team",type:"string"},{name:"iteration",type:"string"},{name:"totalPoints",type:"number"},{name:"completedCount",type:"number"},{name:"plannedVelocity",type:"number"},{name:"acceptedCount",type:"number"},{name:"velocity",type:"number"},{name:"deliverySatisfaction",type:"string"},{name:"remarks",type:"string"},{name:"status",type:"string"}],data:this.rows}),this.grid=Ext.create("Ext.grid.Panel",{store:this.store,columns:[{header:"Team",dataIndex:"team"},{header:"Iteration",dataIndex:"iteration"},{header:"Story Points",dataIndex:"totalPoints"},{header:"# Completed",dataIndex:"completedCount"},{header:"Target Velocity",dataIndex:"plannedVelocity"},{header:"# Accepted",dataIndex:"acceptedCount"},{header:"Velocity",dataIndex:"velocity"},{header:"Delivery Satisfaction",dataIndex:"deliverySatisfaction"},{header:"Remarks",dataIndex:"remarks"},{header:"Status",dataIndex:"status"}]}),this.add(this.grid)}});
+                function addIterationTimeBox(app){var timeboxScope=app.getContext().getTimeboxScope();if(timeboxScope){var record=timeboxScope.getRecord(),name=record.get("Name");app.iterationSelected(name)}else{var container=Ext.create("Ext.container.Container",{itemId:"iterationDropDown",columnWidth:2});app.add(container),app.down("#iterationDropDown").add({xtype:"rallyiterationcombobox",itemId:"iterationSelector",listeners:{select:function(a,b,c){this.iterationSelected(b[0].get("Name"))},scope:app}})}}function getIterations(app){Ext.create("Rally.data.WsapiDataStore",{limit:"Infinity",autoLoad:!0,model:"Iteration",listeners:{load:function(store,data,success){this.iterations(data)},scope:app},fetch:["Name","Project","ObjectID","PlannedVelocity","StartDate","EndDate"]})}
 
             Rally.launchApp('CustomApp', {
                 name:"deliverycenterreport",
@@ -21,36 +22,6 @@
     <style type="text/css">
         .app {
      /* Add app styles here */
-}
-
-    </style>
-    <style type="text/css">
-        
-
-function addIterationTimeBox (app) {
-    var timeboxScope = app.getContext().getTimeboxScope();
-    if(timeboxScope) {
-        var record = timeboxScope.getRecord();
-        var name = record.get('Name');
-        app.iterationSelected(name);
-    } else {
-        
-        var container = Ext.create('Ext.container.Container', {
-            itemId : 'iterationDropDown',
-            columnWidth : 2
-        });
-        app.add( container );
-        // add the iteration dropdown selector
-        app.down("#iterationDropDown").add( {
-            xtype: 'rallyiterationcombobox',
-            itemId : 'iterationSelector',
-            listeners: {
-                    select: app.iterationSelected(),
-                    ready:  app.iterationSelected(),
-                    scope: app
-            }
-        });
-    }
 }
 
     </style>
