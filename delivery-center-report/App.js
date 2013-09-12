@@ -1,12 +1,17 @@
 //     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
 
-var FIELD_DELIVERY_SATISFACTION = "DeliverySatisfaction";
-var FIELD_REMARKS               = "Remarks";
-var FIELD_STATUS                = "Status";
+var FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
+var FIELD_REMARKS               = "Notes";
+var FIELD_STATUS                = "Teamstatus";
 
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    
+    FIELD_DELIVERY_SATISFACTION : "DeliverySatisfaction",
+    FIELD_REMARKS : "Notes",
+    FIELD_STATUS : "Status",
+
 
     launch: function() {
         // addIterationTimeBox(this);
@@ -67,6 +72,9 @@ Ext.define('CustomApp', {
 
     },
     
+    // The 'special' story is one which is in the iteration with a parent named
+    // 'Iteration Reporting Parent'
+    
     getSpecialStory : function( iteration, callback) {
         var that = this;
         Ext.create('Rally.data.WsapiDataStore', {
@@ -80,13 +88,14 @@ Ext.define('CustomApp', {
                     value: iteration.get("ObjectID")
                 },
                 {
-                    property: 'Tags.Name',
+                    property: 'Parent.Name',
                     operator : "contains",
-                    value: 'Special'
+                    value: 'Iteration Reporting Parent'
                 }
             ],
             listeners: {
                 load: function(store, data, success) {
+                    console.log("special story",data[0]);
                     callback(null,data);
                 },
                 scope : that
@@ -97,7 +106,11 @@ Ext.define('CustomApp', {
                     direction: 'ASC'
                 }
             ],
-            fetch: ['FormattedID', 'Name', 'PlanEstimate','ScheduleState','CreationDate']
+            fetch: ['FormattedID', 'Name', 'PlanEstimate',
+            'ScheduleState','CreationDate',
+            this.FIELD_DELIVERY_SATISFACTION, 
+            this.FIELD_REMARKS, 
+            this.FIELD_STATUS]
         });
         
     },
@@ -191,9 +204,9 @@ Ext.define('CustomApp', {
                         plannedVelocity : plannedVelocity, 
                         acceptedCount   : acceptedCount,
                         velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
-                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
-                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
-                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : ""
+                        deliverySatisfaction : specialStory !== null ? specialStory.get(this.FIELD_DELIVERY_SATISFACTION) : "",
+                        remarks         : specialStory !== null ? specialStory.get(this.FIELD_REMARKS) : "",
+                        status          : specialStory !== null ? specialStory.get(this.FIELD_STATUS) : ""
             };
             that.rows.push(row);
             that.store.load();
@@ -230,15 +243,41 @@ Ext.define('CustomApp', {
                 { header : "# Completed",    dataIndex : "completedCount",   align : "center"}, 
                 { header : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"}, 
                 { header : "# Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
-                { header : "Velocity",       dataIndex : "velocity",         align : "center"}, 
+                { header : "Velocity",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
                 { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center"}, 
-                { header : "Remarks",        dataIndex : "remarks",          align : "center"}, 
-                { header : "Status",         dataIndex : "status",           align : "center"}, 
-            ]
+                { header : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
+                { header : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus }, 
+            ],
         });
         
         // add it to the app
         this.add(this.grid);    
+    },
+    
+    renderVelocity : function( value, meta ) {
+        if (value < 80) { 
+            meta.style = 'background-color:red;color:white;'; 
+            return value; 
+        } else {
+            meta.style = 'background-color:green;color:white;'; 
+            return value; 
+        }
+    },
+    
+    renderStatus : function( value, meta ) {
+        if (value == "Green") { 
+            meta.style = 'background-color:green;color:white;'; 
+            return value; 
+        }
+        if (value == "Red") {
+            meta.style = 'background-color:red;color-white'; 
+            return value; 
+        }
+        if (value == "Yellow") {
+            meta.style = 'background-color:yellow'; 
+            return value; 
+        }
     }
+
 
 });
