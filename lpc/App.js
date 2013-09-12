@@ -129,7 +129,7 @@ Ext.define('CustomApp', {
         me._aligned_release_oids.push(this_release_oid);
 
         var release_query = [
-            { property: "Name", operator:"=", value: this_release_name },
+            { property: "Name", operator:"=", value: this_release_name }
         ];
 
         var release_store = Ext.create('Rally.data.WsapiDataStore', {
@@ -1119,6 +1119,7 @@ Ext.define('CustomApp', {
                     chartConfig: {
                         chart: {},
                         title: {
+                            text: '',
                             align: 'center'
                         },
                         yAxis: [

@@ -3,7 +3,7 @@
 <head>
     <title>MyLPC</title>
 
-    <script type="text/javascript" src="https://rally1.rallydev.com/apps/2.0rc1/sdk-debug.js"></script>
+    <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function() {
@@ -143,7 +143,7 @@
                     me._aligned_release_oids.push(this_release_oid);
             
                     var release_query = [
-                        { property: "Name", operator:"=", value: this_release_name },
+                        { property: "Name", operator:"=", value: this_release_name }
                     ];
             
                     var release_store = Ext.create('Rally.data.WsapiDataStore', {
@@ -1133,6 +1133,7 @@
                                 chartConfig: {
                                     chart: {},
                                     title: {
+                                        text: '',
                                         align: 'center'
                                     },
                                     yAxis: [
