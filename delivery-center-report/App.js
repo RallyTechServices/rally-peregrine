@@ -1,27 +1,23 @@
 //     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
 
-var FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
-var FIELD_REMARKS               = "Notes";
-var FIELD_STATUS                = "Teamstatus";
+var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
+var    FIELD_REMARKS = "Notes";
+var    FIELD_STATUS = "Teamstatus";
+
 
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
-    
-    FIELD_DELIVERY_SATISFACTION : "DeliverySatisfaction",
-    FIELD_REMARKS : "Notes",
-    FIELD_STATUS : "Status",
-
 
     launch: function() {
         // addIterationTimeBox(this);
+        console.log(this.FIELD_DELIVERY_SATISFACTION);
         this.rows = [];
         this.showTable();
         getIterations(this);
     },
     
     iterationSelected : function(name) {
-        console.log(name);
     },
     
     _toDate : function(ds) {
@@ -31,7 +27,6 @@ Ext.define('CustomApp', {
     iterations : function(data) {
         var that = this;
         var today = new Date();
-        console.log("iterations",data.length);
 
         var projectIterations = _.groupBy(data, function(iteration) {
             var project = iteration.get("Project");
@@ -40,7 +35,7 @@ Ext.define('CustomApp', {
         });
         
         _.each( _.keys(projectIterations), function(key) {
-            console.log("team",key);
+            //console.log("team",key);
             var iterations = projectIterations[key];
             // filter to just those ones ended before today
             iterations = _.filter(iterations, function(iteration) {
@@ -96,6 +91,8 @@ Ext.define('CustomApp', {
             listeners: {
                 load: function(store, data, success) {
                     console.log("special story",data[0]);
+                    console.log(FIELD_DELIVERY_SATISFACTION);
+                    console.log(data[0].get(FIELD_DELIVERY_SATISFACTION));
                     callback(null,data);
                 },
                 scope : that
@@ -108,9 +105,9 @@ Ext.define('CustomApp', {
             ],
             fetch: ['FormattedID', 'Name', 'PlanEstimate',
             'ScheduleState','CreationDate',
-            this.FIELD_DELIVERY_SATISFACTION, 
-            this.FIELD_REMARKS, 
-            this.FIELD_STATUS]
+            FIELD_DELIVERY_SATISFACTION, 
+            FIELD_REMARKS, 
+            FIELD_STATUS]
         });
         
     },
@@ -170,7 +167,7 @@ Ext.define('CustomApp', {
 
     process : function( team, iterations, results, stories) {
         var that = this;
-        console.log("stories",stories);
+        //console.log("stories",stories);
         
         _.each(iterations,function(iteration,x) {
             // group the cumulative flow records by creation date (we want to get the last da)
@@ -189,12 +186,12 @@ Ext.define('CustomApp', {
             var acceptedCount = that.countForState(lcfd,"Accepted");
             var completedCount = that.countForState(lcfd,"Completed");
             
-            console.log(team,iteration.get("Name"),results[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
+            //console.log(team,iteration.get("Name"),results[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
             
             var specialStory = stories[x] !== null && stories[x].length > 0 ? stories[x][0] : null;
             
             var plannedVelocity = iteration.get("PlannedVelocity");
-            console.log("pv",plannedVelocity);
+            //console.log("pv",plannedVelocity);
             
             // add a row for each team, iteration combination
             var row = { team            : team, 
@@ -204,9 +201,9 @@ Ext.define('CustomApp', {
                         plannedVelocity : plannedVelocity, 
                         acceptedCount   : acceptedCount,
                         velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
-                        deliverySatisfaction : specialStory !== null ? specialStory.get(this.FIELD_DELIVERY_SATISFACTION) : "",
-                        remarks         : specialStory !== null ? specialStory.get(this.FIELD_REMARKS) : "",
-                        status          : specialStory !== null ? specialStory.get(this.FIELD_STATUS) : ""
+                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
+                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
+                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : ""
             };
             that.rows.push(row);
             that.store.load();
@@ -214,8 +211,7 @@ Ext.define('CustomApp', {
     },
     
     showTable : function() {
-        console.log("rows",this.rows);
-        // a store from the array of items
+
         this.store = Ext.create('Ext.data.Store', {
             fields: [
                     { name : "team" ,          type : "string"},
@@ -246,10 +242,9 @@ Ext.define('CustomApp', {
                 { header : "Velocity",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
                 { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center"}, 
                 { header : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
-                { header : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus }, 
-            ],
+                { header : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
+            ]
         });
-        
         // add it to the app
         this.add(this.grid);    
     },
