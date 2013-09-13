@@ -1,27 +1,21 @@
 //     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
 
     // <meta name="Name" content="DeliveryCenterReport" />
-    // <meta name="Version" content="2013.9.12" />
+    // <meta name="Version" content="2013.9.13" />
     // <meta name="Vendor" content="Rally Software" />
 
 var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "Notes";
 var    FIELD_STATUS = "Teamstatus";
 
-
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
 
     launch: function() {
-        // addIterationTimeBox(this);
-        console.log(this.FIELD_DELIVERY_SATISFACTION);
         this.rows = [];
         this.showTable();
         getIterations(this);
-    },
-    
-    iterationSelected : function(name) {
     },
     
     _toDate : function(ds) {
@@ -94,9 +88,6 @@ Ext.define('CustomApp', {
             ],
             listeners: {
                 load: function(store, data, success) {
-                    console.log("special story",data[0]);
-                    console.log(FIELD_DELIVERY_SATISFACTION);
-                    console.log(data[0].get(FIELD_DELIVERY_SATISFACTION));
                     callback(null,data);
                 },
                 scope : that
@@ -195,6 +186,7 @@ Ext.define('CustomApp', {
             var specialStory = stories[x] !== null && stories[x].length > 0 ? stories[x][0] : null;
             
             var plannedVelocity = iteration.get("PlannedVelocity");
+            var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
             //console.log("pv",plannedVelocity);
             
             // add a row for each team, iteration combination
@@ -207,7 +199,9 @@ Ext.define('CustomApp', {
                         velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
                         deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
                         remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
-                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : ""
+                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
+                        accepted        : accepted,
+                        velocityUtilization : velocityUtilization
             };
             that.rows.push(row);
             that.store.load();
@@ -227,24 +221,29 @@ Ext.define('CustomApp', {
                     { name : "velocity",       type : "number"},
                     { name : "deliverySatisfaction", type : "string"},
                     { name : "remarks",        type : "string"},
-                    { name : "status",         type : "string"}
+                    { name : "status",         type : "string"},
+                    { name : "accepted",           type : "number"},
+                    { name : "velocityUtilization",type : "number"}
             ],
             data : this.rows
         });
 
         // create the grid
         this.grid = Ext.create('Ext.grid.Panel', {
+        //this.grid = Ext.create('Rally.ui.grid.Grid', {
             // title: 'Defect Density',
             store: this.store,
             columns: [
                 { header : 'Team',           dataIndex: 'team'},
                 { header : "Iteration",      dataIndex : "iteration"       },
+                { header : "Completed<br/>(count)",    dataIndex : "completedCount",   align : "center"}, 
+                { header : "Accepted<br/>(count)",     dataIndex : "acceptedCount",    align : "center"}, 
                 { header : "Story Points",   dataIndex : "totalPoints",      align : "center"}, 
-                { header : "# Completed",    dataIndex : "completedCount",   align : "center"}, 
-                { header : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"}, 
-                { header : "# Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
-                { header : "Velocity",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
-                { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center"}, 
+                { header : "Target<br>Velocity",dataIndex : "plannedVelocity",  align : "center"},
+                { header : "Accepted<br/>Points",dataIndex : "accepted",  align : "center"}, 
+                { header : "Velocity (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
+                { header : "Velocity <br/>Utilization (%)",dataIndex : "velocityUtilization",  align : "center"}, 
+                { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
                 { header : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
                 { header : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
             ]
@@ -276,7 +275,18 @@ Ext.define('CustomApp', {
             meta.style = 'background-color:yellow'; 
             return value; 
         }
+    },
+    
+    renderSatisfaction : function( value, meta ) {
+        if (value >= 1 && value <= 7) { 
+            meta.style = 'background-color:red;color:white;'; 
+            return value; 
+        } else 
+            if (value > 7)
+            {
+                meta.style = 'background-color:green;color-white'; 
+                return value; 
+            }
     }
-
 
 });
