@@ -1,0 +1,15 @@
+.app {
+     /* Add app styles here */
+}
+
+.wrap .x-grid-cell-inner {
+    white-space: normal;
+}
+
+.red {
+    background-color : red;
+}
+
+.green {
+    background-color : green;
+}
