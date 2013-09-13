@@ -3,7 +3,7 @@ deliverycenterreport
 
 ## Overview
 
-!(https://raw.github.com/wrackzone/rally-peregrine/master/delivery-center-report/ScreenShot.png)
+![](https://raw.github.com/wrackzone/rally-peregrine/master/delivery-center-report/ScreenShot.png)
 
 1. Identify the scrum teams. 
 2. Choose up to 3 most recent completed iterations.
