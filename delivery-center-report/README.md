@@ -15,7 +15,6 @@ deliverycenterreport
     - - delivery satisfaction
     - - remarks
     - - status
-    - 
 
 
 ## License
