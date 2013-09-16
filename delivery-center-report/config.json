@@ -4,6 +4,7 @@
    "server": "https://rally1.rallydev.com",
    "sdk": "2.0rc1",
    "javascript": [
+      "lib/async.js",
       "App.js",
       "iterations.js"
    ],
