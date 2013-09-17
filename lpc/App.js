@@ -734,19 +734,19 @@ Ext.define('CustomApp', {
         console.log(me._current_iteration_index);
         console.log(['remaining',remaining_backlog]);
         
-        var number_sprints_optimistic = Math.ceil(me._target_backlog/data.BestHistoricalActualVelocity);
-        var number_sprints_pessimistic = Math.ceil(me._target_backlog/data.WorstHistoricalActualVelocity);
+        var number_sprints_optimistic = Math.ceil(remaining_backlog/data.BestHistoricalActualVelocity);
+        var number_sprints_pessimistic = Math.ceil(remaining_backlog/data.WorstHistoricalActualVelocity);
 
         me._log(['number_sprints_optimistic: ', number_sprints_optimistic,
             'number_sprints_pessimistic: ', number_sprints_pessimistic]);
 
         // when likely to finish (if starting at first positive sprint)
-        data.ProjectedFinishOptimisticIndex = data.FirstPositiveVelocityIterationIndex + number_sprints_optimistic - 1;
-        data.ProjectedFinishPessimisticIndex = data.FirstPositiveVelocityIterationIndex + number_sprints_pessimistic - 1 ;
+        data.ProjectedFinishOptimisticIndex = me._current_iteration_index + number_sprints_optimistic;
+        data.ProjectedFinishPessimisticIndex = me._current_iteration_index + number_sprints_pessimistic;
 
         // If projections extend past our Release date, we need to
         // "pad" the data with fake iterations to plot projection
-        var number_iterations_in_release = this._iterations.length - data.FirstPositiveVelocityIterationIndex;
+        var number_iterations_in_release = this._iterations.length - me._current_iteration_index;
         me._log(['number_iterations_in_release: ', number_iterations_in_release]);
 
         if (number_sprints_pessimistic >= number_iterations_in_release) {
@@ -773,14 +773,14 @@ Ext.define('CustomApp', {
         }
 
         // Now add in Optimistic/Pessimistic projected velocity data
-        var optimistic_velocity_adder = 0;
-        var pessimistic_velocity_adder = 0;
+        var optimistic_velocity_adder = data.CumulativeActualVelocity[me._current_iteration_index] - data.BestHistoricalActualVelocity;
+        var pessimistic_velocity_adder = data.CumulativeActualVelocity[me._current_iteration_index] - data.WorstHistoricalActualVelocity;
 
         Ext.Array.each(data.Name, function(iteration_name, iteration_index) {
             var cumulative_optimistic_velocity = null;
             var cumulative_pessimistic_velocity = null;
 
-            if ( iteration_index >= data.FirstPositiveVelocityIterationIndex) {
+            if ( iteration_index >= me._current_iteration_index) {
                 pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
                 optimistic_velocity_adder += data.BestHistoricalActualVelocity;
 
