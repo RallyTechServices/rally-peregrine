@@ -19,13 +19,12 @@
             
                 // Title/version
                 title: 'Lean Project Charter/Releae Predictability',
-                version: '0.30',
+                version: '0.40',
             
                 // Global variables
                 _debug: true,
                 _release_combo_box: null,
                 _target_backlog_number_box: null,
-                _release: null,
                 _project: null,
                 _child_project_count: null,
                 _iterations: [],
@@ -65,8 +64,6 @@
                 // Clears the asynch return flags and kicks off the data collection/charting process chain
                 _kickOff: function() {
                     this._asynch_return_flags = {};
-                    this._release = this._release_combo_box.getRecord();
-                    console.log('_kickOff: this._release: ', this._release);
                     this._findChildProjects();
                 },
             
@@ -124,7 +121,7 @@
                                         me._project = result;
                                         me._child_project_count = result.get('Children').Count;
                                     }
-                                    me._findIterationsBetweenDates();
+                                    me._findIterationsForRelease();
                                 }
                             });
                         }
@@ -134,13 +131,13 @@
                 // Gets list of all Releases that match timebox of selected release
                 // Calls _findTodaysReleaseBacklog when done
                 _findAlignedReleases: function() {
-            
                     var me = this;
             
                     var this_release = this._release_combo_box.getRecord();
                     var this_release_name = this_release.get('Name');
                     var this_release_oid = this_release.get('ObjectID');
-                    me._aligned_release_oids.push(this_release_oid);
+                    
+                    this._aligned_release_oids.push(this_release_oid);
             
                     var release_query = [
                         { property: "Name", operator:"=", value: this_release_name }
@@ -170,7 +167,6 @@
                                         }
                                     }
                                 });
-                                console.log('_findAlignedReleases: me._aligned_release_oids: ', me._aligned_release_oids);
                                 me._asynch_return_flags["aligned_releases"] = true;
                                 me._findTodaysReleaseBacklog();
                                 me._findReleaseBacklogAtEachIteration();
@@ -194,7 +190,7 @@
             
                 // Check to see if Release Timebox aligns with that of Top-level Release
                 _checkReleaseAlignment: function(release) {
-                    var parent_release = this._release;
+                    var parent_release = this._release_combo_box.getRecord();
                     if (parent_release) {
                         return this._checkReleaseTimebox(parent_release, release);
                     } else {
@@ -206,89 +202,32 @@
                     var me = this;
                     var today_date = new Date();
             
-                    var today_iso_string = Rally.util.DateTime.toIsoString(today_date, true).replace(/T.*$/,"");
-                    this._log('Find iterations where StartDate <= ' + today_iso_string + ' and EndDate >= ' + today_iso_string );
-            
-                    var iteration_query = [
-                        { property: "StartDate", operator:"<=", value: today_iso_string },
-                        { property: "EndDate", operator:">=", value: today_iso_string }
-                    ];
-            
-                    var current_iteration_store = Ext.create('Rally.data.WsapiDataStore',{
-                        model: 'Iteration',
-                        autoLoad: true,
-                        filters: iteration_query,
-                        fetch: ['Name', 'PlannedVelocity', 'StartDate', 'EndDate'],
-                        context: { projectScopeDown: false },
-                        listeners: {
-                            scope: this,
-                            load: function(store, records) {
-                                // This will be not be correct if we have overlapping iterations for some reason
-                                var current_iteration = records[0];
-            
-                                var this_release = this._release;
-                                var this_release_date = this_release.get('ReleaseDate');
-                                var current_iteration_end_date;
-                                if (current_iteration) {
-                                    current_iteration_end_date = current_iteration.get('EndDate');
-            
-                                    // If we're past the ReleaseDate, then pick the last iteration in the
-                                    // selected Release to be the "current" iteration.
-                                    if (current_iteration_end_date > this_release_date) {
-                                        current_iteration = me._iterations[me._iterations.length-1];
-                                    }
-                                } else {
-                                    // Current iteration not found. This can happen if we're between iterations
-                                    // within our current release (like on a weekend). Find the closest
-                                    // iteration to "now".
-                                    var today = new Date().getTime();
-                                    // Times are in milliseconds - use our really big number to make
-                                    // sure we get a difference less than our "infinity"
-                                    var min_time_delta = this._really_big_number;
-                                    var closest_iteration;
-                                    Ext.Array.each(me._iterations, function(iteration) {
-                                        var this_iteration_end_date = iteration.get('EndDate');
-                                        var time_delta = Math.abs(this_iteration_end_date.getTime() - today);
-                                        if (time_delta < min_time_delta) {
-                                            closest_iteration = iteration;
-                                            min_time_delta = time_delta;
-                                        }
-                                    });
-                                    current_iteration = closest_iteration;
-                                    current_iteration_end_date = current_iteration.get('EndDate');
-                                }
-            
-                                me._current_iteration = current_iteration;
-            
-                                // Calculate array index of current_iteration
-                                var index = 0;
-                                var index_of_current = 0;
-                                Ext.Array.each(me._iterations, function(iteration) {
-                                    var this_iteration_end_date = iteration.get('EndDate');
-                                    if (this_iteration_end_date === current_iteration_end_date) {
-                                        index_of_current = index;
-                                    }
-                                    index++;
-                                });
-                                me._current_iteration_index = index_of_current;
-                                /* --
-                                console.log('me._current_iteration: ', me._current_iteration);
-                                console.log('me.current_iteration_index: ', me._current_iteration_index);
-                                -- */
-            
-                                me._asynch_return_flags["current_iteration"] = true;
-                                if (me._child_project_count > 0) {
-                                    me._findAlignedReleases();
-                                } else {
-                                    me._asynch_return_flags["aligned_releases"] = true;
-                                    me._findTodaysReleaseBacklog();
-                                    me._findReleaseBacklogAtEachIteration();
-                                }
-                                me._makeChart();
+                    var current_release = this._release_combo_box.getRecord();
+                    // if this is a past release, we want the 'current' iteration to be the last one
+                    if ( today_date > current_release.get('ReleaseDate')){
+                        me._current_iteration = me._iterations[me._iterations.length-1];
+                    } else {
+                        var counter = 0;
+                        var current_index = -1;
+                
+                        Ext.Array.each(me._iterations,function(iteration){
+                            if ( iteration.get('StartDate') < today_date && iteration.get('EndDate') > today_date ) {
+                                current_index = counter;
+                                me._current_iteration_index = counter;
+                                me._current_iteration = iteration;
                             }
-                        }
-                    });
+                            counter++;
+                        });
+                    }
             
+                    me._asynch_return_flags["current_iteration"] = true;
+                    if (me._child_project_count > 0) {
+                        me._findAlignedReleases();
+                    } else {
+                        me._asynch_return_flags["aligned_releases"] = true;
+                        me._findTodaysReleaseBacklog();
+                        me._findReleaseBacklogAtEachIteration();
+                    }
                 },
             
                 // Check to see if two Iteration Timeboxes align
@@ -316,15 +255,14 @@
                 // If we're aggregating data from child projects, make sure that their
                 // Iteration timeboxes line up with Iterations in top-scoped Project
                 _findAlignedIterations: function() {
-            
                     var me = this;
             
-                    // Run the same query as _findIterationsBetweenDates(), but with projectScopeDown = true
+                    // Run the same query as _findIterationsForRelease(), but with projectScopeDown = true
             
                     // dates are given in JS, but we need them to be ISO
                     // Rally.util.DateTime.toIsoString(date, true); will return a date in UTC
-                    var start_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseStartDate'), true);
-                    var end_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseDate'), true);
+                    var start_date_iso = Rally.util.DateTime.toIsoString(this._release_combo_box.getRecord().get('ReleaseStartDate'), true);
+                    var end_date_iso = Rally.util.DateTime.toIsoString(this._release_combo_box.getRecord().get('ReleaseDate'), true);
                     this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
             
                     var iteration_query = [
@@ -334,8 +272,6 @@
                         { property: "StartDate", operator:"<=", value: end_date_iso }
                     ];
             
-                    // Start out by grabbing Iterations at current project-level only
-                    // If we have child projects, then we'll get child iterations later
                     var iteration_store = Ext.create('Rally.data.WsapiDataStore', {
                         model: 'Iteration',
                         autoLoad: true,
@@ -361,7 +297,6 @@
                                     }
                                 });
                                 me._asynch_return_flags["aligned_iterations"] = true;
-                                console.log("me._asynch_return_flags['aligned_iterations']: ", me._asynch_return_flags["aligned_iterations"]);
                                 me._findAcceptedItemsInEachIteration();
                                 me._findCurrentIteration();
                                 me._makeChart();
@@ -387,8 +322,7 @@
                     return is_aligned;
                 },
             
-                _findIterationsBetweenDates: function() {
-            
+                _findIterationsForRelease: function() {
                     var me = this;
             
                     if ( this._chart ) {
@@ -400,8 +334,8 @@
             
                     // dates are given in JS, but we need them to be ISO
                     // Rally.util.DateTime.toIsoString(date, true); will return a date in UTC
-                    var start_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseStartDate'), true);
-                    var end_date_iso = Rally.util.DateTime.toIsoString(this._release.get('ReleaseDate'), true);
+                    var start_date_iso = Rally.util.DateTime.toIsoString(this._release_combo_box.getRecord().get('ReleaseStartDate'), true);
+                    var end_date_iso = Rally.util.DateTime.toIsoString(this._release_combo_box.getRecord().get('ReleaseDate'), true);
                     this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
             
                     var iteration_query = [
@@ -438,15 +372,7 @@
                                 me._log(['me._iterations: ', me._iterations]);
             
                                 if (me._iterations.length > 0) {
-                                    if (me._child_project_count > 0) {
                                         me._findAlignedIterations();
-                                    } else {
-                                        me._asynch_return_flags["aligned_iterations"] = true;
-                                        me._findReleaseBacklogAtEachIteration();
-                                        me._findAcceptedItemsInEachIteration();
-                                        me._findCurrentIteration();
-                                        me._makeChart();
-                                    }
                                 } else {
                                     me._noIterationsNotify();
                                 }
@@ -464,7 +390,7 @@
             
                     var iteration_query = [
                         { property: "ScheduleState", operator: ">=", value: "Accepted" },
-                        { property: "Release.Name", operator: "=", value: this._release.get("Name") }
+                        { property: "Release.Name", operator: "=", value: this._release_combo_box.getRecord().get("Name") }
                     ];
             
                     this._velocities = {}; // key will be iteration name
@@ -536,9 +462,8 @@
                 // This function finds items that were added to the backlog today and are not yet
                 // captured in ReleaseCumulativeFlow data
                 _findTodaysReleaseBacklog: function() {
-            
                     var me = this;
-                    var this_release = this._release.get('ObjectID');
+                    var this_release = this._release_combo_box.getRecord().get('ObjectID');
                     var this_iteration = this._current_iteration;
             
                     if (!this_iteration) {
@@ -647,7 +572,7 @@
                     var me = this;
                     me._release_flow = []; // in order of sprint end
             
-                    var this_release = me._release;
+                    var this_release = this._release_combo_box.getRecord();
                     var this_release_oid = this_release.get('ObjectID');
             
                     var release_filters = Ext.create('Rally.data.QueryFilter', {
@@ -693,7 +618,6 @@
                                     ).replace(/T.*$/,"");
             
                                     var plan_estimate = card.get('CardEstimateTotal');
-                                    // me._doubleLineLog("plan_estimate", plan_estimate)
             
                                     if ( !me._release_flow_hash[capture_date] ) {
                                         me._release_flow_hash[capture_date] = 0;
@@ -701,7 +625,6 @@
             
                                     me._release_flow_hash[capture_date] += plan_estimate;
                                 });
-                                // me._doubleLineLog("this._release_flow_hash::", me._release_flow_hash);
                                 this._asynch_return_flags["flows"] = true;
                                 me._makeChart();
                             }
@@ -734,7 +657,7 @@
                     var current_iteration = this._current_iteration;
                     var current_iteration_end_date;
             
-                    var current_release = this._release;
+                    var current_release = this._release_combo_box.getRecord();
                     var release_date = current_release.get('ReleaseDate');
             
                     var today = new Date();
@@ -746,7 +669,7 @@
                     var planned_velocity_adder = 0;
                     var actual_velocity_adder = 0;
                     var best_historical_actual_velocity = 0;
-                    var worst_historical_actual_velocity = this._really_big_number;
+                    var worst_historical_actual_velocity = 0;
                     var most_recent_backlog = 0;
             
                     // Assemble Actual and Planned velocity data
@@ -796,7 +719,6 @@
                 },
             
                 _assembleProjectedData: function() {
-            
                     var me = this;
                     var data = this._chart_data;
             
@@ -804,7 +726,7 @@
                     var current_iteration = this._current_iteration;
                     var current_iteration_end_date;
             
-                    var current_release = this._release;
+                    var current_release = this._release_combo_box.getRecord();
                     var release_date = current_release.get('ReleaseDate');
             
                     var today = new Date();
@@ -815,11 +737,17 @@
             
                     // Add in the backlog target line and projected finish lines
                     if (me._target_backlog === 0) {
-                        console.log("MRB", data.MostRecentBacklog);
                         me._target_backlog = data.MostRecentBacklog;
                         me._target_backlog_number_box.setValue(data.MostRecentBacklog);
                     }
             
+                    console.log( ["data at this point",data]);
+                    
+                    var remaining_backlog = me._target_backlog - data['CumulativeActualVelocity'][me._current_iteration_index];
+            
+                    console.log(me._current_iteration_index);
+                    console.log(['remaining',remaining_backlog]);
+                    
                     var number_sprints_optimistic = Math.ceil(me._target_backlog/data.BestHistoricalActualVelocity);
                     var number_sprints_pessimistic = Math.ceil(me._target_backlog/data.WorstHistoricalActualVelocity);
             
@@ -887,18 +815,15 @@
                 _getBacklogOnEndOfIteration: function(iteration) {
                     var backlog = null;
                     var iteration_end = Rally.util.DateTime.toIsoString(iteration.get('EndDate'), true).replace(/T.*$/,"");
-                    // this._doubleLineLog("iteration_end", iteration_end);
-                    // this._doubleLineLog("release_flow_hash", this._release_flow_hash);
                     if (this._release_flow_hash[iteration_end]) {
                         backlog = this._release_flow_hash[iteration_end];
-                        // this._doubleLineLog("backlog", backlog);
                     }
                     return backlog;
                 },
             
                 _isSelectedReleaseCurrent: function() {
                     var today = new Date();
-                    var this_release = this._release;
+                    var this_release = this._release_combo_box.getRecord();
                     var this_release_date = this_release.get('ReleaseDate');
                     var this_release_start_date = this_release.get('ReleaseStartDate');
                     this._log(["_isSelectedReleaseCurrent", (today > this_release_start_date && today <= this_release_date)]);
@@ -915,24 +840,24 @@
                     var velocity = null;
             
                     var velocities = [];
+                    var counter = 0;
                     for ( var i in velocity_hash ) {
-                        velocities.push(velocity_hash[i]);
+                        if (velocity_hash[i] > 0 && counter !== this._current_iteration_index ) {
+                            velocities.push(velocity_hash[i]);
+                        }
+                        counter++;
                     }
             
                     if ( velocities.length > 0 ) {
-                        velocities.sort();
+                        velocities.sort(function sortfunction(a, b){
+                            return (a - b) //causes an array to be sorted numerically and ascending
+                        });
                         var velocities_to_average = velocities;
                         if ( velocities.length >= 3 ) {
                             velocities_to_average = Ext.Array.slice(velocities, -3);
                         }
             
-                        var best_velocity = 0;
-                        Ext.Array.each(velocities_to_average, function(this_velocity) {
-                            if (this_velocity > best_velocity) {
-                                best_velocity = this_velocity;
-                            }
-                        });
-                        velocity = best_velocity;
+                        velocity = Math.floor( Ext.Array.mean(velocities_to_average) );
                         this._log(["best", velocity_hash, velocities, velocities_to_average, velocity]);
                     }
                     return velocity;
@@ -943,20 +868,21 @@
                     var velocity = null;
             
                     var velocities = [];
+                    var counter = 0;
                     for ( var i in velocity_hash ) {
-                        velocities.push(velocity_hash[i]);
+                        if (velocity_hash[i] > 0 && counter !== this._current_iteration_index) {
+                            velocities.push(velocity_hash[i]);
+                        }
+                        counter++;
                     }
             
                     if ( velocities.length > 0 ) {
-                        velocities.sort();
-                        var velocities_to_average = velocities;
-                        var worst_velocity = this._really_big_number;
-                        Ext.Array.each(velocities_to_average, function(this_velocity) {
-                            if (this_velocity < worst_velocity) {
-                                worst_velocity = this_velocity;
-                            }
+                        velocities.sort(function sortfunction(a, b){
+                            return (a - b) //causes an array to be sorted numerically and ascending
                         });
-                        velocity = worst_velocity;
+                        var velocities_to_average = Ext.Array.slice(velocities,0,3);
+                        
+                        velocity = Math.floor( Ext.Array.mean(velocities_to_average));
                         this._log(["worst", velocity_hash, velocities, velocities_to_average, velocity]);
                     }
                     return velocity;
@@ -980,10 +906,7 @@
                         this._log("Not yet received the defect velocity data");
                         proceed = false;
                     }
-                    if (!this._asynch_return_flags["current_iteration"]) {
-                        this._log("Not yet received the Current Iteration");
-                        proceed = false;
-                    }
+            
                     if (!this._asynch_return_flags["story_backlog_today"]) {
                         this._log("Not yet received today's story backlog");
                         proceed = false;
@@ -1073,7 +996,6 @@
             
                             var chart_hash = this._chart_data;
             
-                            this._log(chart_hash);
                             this._chart = this.down('#chart_box').add({
                                 xtype: 'rallychart',
                                 chartData: {
@@ -1186,13 +1108,6 @@
             
                 _log: function(msg) {
                     window.console && console.log(msg);
-                },
-            
-                _doubleLineLog: function(msg, variable) {
-                    if (this._debug) {
-                        console.log(msg);
-                        console.log(variable);
-                    }
                 }
             
             });
