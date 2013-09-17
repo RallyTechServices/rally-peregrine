@@ -727,12 +727,9 @@ Ext.define('CustomApp', {
             me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
 
-        console.log( ["data at this point",data]);
+        this._log( ["data at this point",data]);
         
         var remaining_backlog = me._target_backlog - data['CumulativeActualVelocity'][me._current_iteration_index];
-
-        console.log(me._current_iteration_index);
-        console.log(['remaining',remaining_backlog]);
         
         var number_sprints_optimistic = Math.ceil(remaining_backlog/data.BestHistoricalActualVelocity);
         var number_sprints_pessimistic = Math.ceil(remaining_backlog/data.WorstHistoricalActualVelocity);
@@ -918,8 +915,15 @@ Ext.define('CustomApp', {
 
     _getPlotLines: function(data) {
         var plotlines = [];
+        Ext.Array.each(this._iterations, function(iteration,index){
+            plotlines.push({
+                color: '#c0c0c0',
+                width: 1,
+                value: index
+            });
+        });
         if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex && data.ProjectedFinishPessimisticIndex > this._current_iteration_index ) {
-            plotlines = [
+            plotlines.push(
                 {
                     color: '#0a0',
                     width: 2,
@@ -931,10 +935,8 @@ Ext.define('CustomApp', {
                         }
                     }
                 }
-            ];
-        } else {
-            plotlines = [];
-            
+            );
+        } else {            
             if (data.ProjectedFinishPessimisticIndex > this._current_iteration_index) {
                 plotlines.push({
                     color: '#a00',
@@ -1089,6 +1091,8 @@ Ext.define('CustomApp', {
                         ],
                         xAxis: [
                             {
+                                minorTickInterval: null,
+                                tickLength: 0,
                                 categories: chart_hash.Name,
                                 plotLines: me._getPlotLines(chart_hash),
                                 labels: {
