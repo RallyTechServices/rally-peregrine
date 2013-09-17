@@ -749,7 +749,11 @@ Ext.define('CustomApp', {
         var number_iterations_in_release = this._iterations.length - me._current_iteration_index;
         me._log(['number_iterations_in_release: ', number_iterations_in_release]);
 
-        if (number_sprints_pessimistic >= number_iterations_in_release) {
+        if (number_sprints_pessimistic >= number_iterations_in_release && remaining_backlog > 0) {
+
+            if ( number_sprints_pessimistic > number_iterations_in_release + 5 ) { 
+                number_sprints_pessimistic = number_iterations_in_release + 5; 
+            }
 
             var extra_sprints = number_sprints_pessimistic - number_iterations_in_release;
             me._log(["extra_sprints: ", extra_sprints]);
@@ -780,7 +784,7 @@ Ext.define('CustomApp', {
             var cumulative_optimistic_velocity = null;
             var cumulative_pessimistic_velocity = null;
 
-            if ( iteration_index >= me._current_iteration_index) {
+            if ( iteration_index >= me._current_iteration_index && remaining_backlog > 0 ) {
                 pessimistic_velocity_adder += data.WorstHistoricalActualVelocity;
                 optimistic_velocity_adder += data.BestHistoricalActualVelocity;
 
@@ -914,7 +918,7 @@ Ext.define('CustomApp', {
 
     _getPlotLines: function(data) {
         var plotlines = [];
-        if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex ) {
+        if ( data.ProjectedFinishPessimisticIndex === data.ProjectedFinishOptimisticIndex && data.ProjectedFinishPessimisticIndex > this._current_iteration_index ) {
             plotlines = [
                 {
                     color: '#0a0',
@@ -929,8 +933,10 @@ Ext.define('CustomApp', {
                 }
             ];
         } else {
-            plotlines = [
-                {
+            plotlines = [];
+            
+            if (data.ProjectedFinishPessimisticIndex > this._current_iteration_index) {
+                plotlines.push({
                     color: '#a00',
                     width: 2,
                     value: data.ProjectedFinishPessimisticIndex,
@@ -940,8 +946,10 @@ Ext.define('CustomApp', {
                             color: '#a00'
                         }
                     }
-                },
-                {
+                });
+            }
+            if (data.ProjectedFinishOptimisticIndex > this._current_iteration_index) {
+                plotlines.push({
                     color: '#0a0',
                     width: 2,
                     value: data.ProjectedFinishOptimisticIndex,
@@ -951,8 +959,8 @@ Ext.define('CustomApp', {
                             color: '#0a0'
                         }
                     }
-                }
-            ];
+                });
+            }
         }
         return plotlines;
     },
@@ -961,6 +969,7 @@ Ext.define('CustomApp', {
         var me = this;
         this._log("_makeChart");
 
+        
         if ( this._finished_all_asynchronous_calls() ) {
             if (this._iterations.length === 0) {
                 this._chart = this.down('#chart_box').add({
@@ -982,6 +991,15 @@ Ext.define('CustomApp', {
 
                 var chart_hash = this._chart_data;
 
+                var max = this._target_backlog * 1.25;
+                if ( Ext.Array.max(chart_hash.OptimisticProjectedVelocity) > max ) {
+                    max = Ext.Array.max(chart_hash.OptimisticProjectedVelocity);
+                }
+                if ( Ext.Array.max(chart_hash.CumulativePlannedVelocity) > max) {
+                    max = Ext.Array.max(chart_hash.CumulativePlannedVelocity);
+                }
+        
+                this._log(["max",max]);
                 this._chart = this.down('#chart_box').add({
                     xtype: 'rallychart',
                     chartData: {
@@ -1046,6 +1064,7 @@ Ext.define('CustomApp', {
                         },
                         yAxis: [
                             {
+                                max: max,
                                 title: {
                                     enabled: true,
                                     text: 'Story Points',
