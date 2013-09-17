@@ -1,8 +1,3 @@
-//     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/async/0.2.7/async.min.js"></script>
-
-    // <meta name="Name" content="DeliveryCenterReport" />
-    // <meta name="Version" content="2013.9.13" />
-    // <meta name="Vendor" content="Rally Software" />
 
 var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "Notes";
