@@ -25,7 +25,6 @@ Ext.define('CustomApp', {
     _velocities: {},
     _trend_data: {},
     _target_backlog: 0,
-    _really_big_number: 1000000000000000,
     _chart_data: null,
 
     // Layout items
@@ -324,12 +323,20 @@ Ext.define('CustomApp', {
         var end_date_iso = Rally.util.DateTime.toIsoString(this._release_combo_box.getRecord().get('ReleaseDate'), true);
         this._log('Find iterations between ' + start_date_iso + ' and ' + end_date_iso );
 
-        var iteration_query = [
-            { property: "StartDate", operator:">=", value: start_date_iso },
-            // Changed to StartDate for high end of query since Philips expects to
-            // see any Iteration that "touches" a Release be included
-            { property: "StartDate", operator:"<=", value: end_date_iso }
-        ];
+        var start_query = Ext.create('Rally.data.QueryFilter',{ 
+                property: "StartDate", operator:">=", value: start_date_iso
+            }).and( Ext.create('Rally.data.QueryFilter',{
+                property: "StartDate", operator:"<=", value: end_date_iso
+            })
+        );
+        var end_query = Ext.create('Rally.data.QueryFilter',{ 
+                property: "EndDate", operator:">=", value: start_date_iso 
+            }).and( Ext.create('Rally.data.QueryFilter',{
+                property: "EndDate", operator:"<=", value: end_date_iso
+            })
+        );
+        var iteration_query = start_query.or(end_query);
+        this._log(["filter",iteration_query.toString()]);
 
         // Start out by grabbing Iterations at current project-level only
         // If we have child projects, then we'll get child iterations later
