@@ -843,15 +843,15 @@ Ext.define('CustomApp', {
         }
 
         if ( velocities.length > 0 ) {
-            velocities.sort(function sortfunction(a, b){
-                return (a - b) //causes an array to be sorted numerically and ascending
-            });
+//            velocities.sort(function sortfunction(a, b){
+//                return (a - b) //causes an array to be sorted numerically and ascending
+//            });
             var velocities_to_average = velocities;
             if ( velocities.length >= 3 ) {
                 velocities_to_average = Ext.Array.slice(velocities, -3);
             }
 
-            velocity = Math.floor( Ext.Array.mean(velocities_to_average) );
+            velocity = Math.floor( Ext.Array.max(velocities_to_average) );
             this._log(["best", velocity_hash, velocities, velocities_to_average, velocity]);
         }
         return velocity;
@@ -871,12 +871,13 @@ Ext.define('CustomApp', {
         }
 
         if ( velocities.length > 0 ) {
-            velocities.sort(function sortfunction(a, b){
-                return (a - b) //causes an array to be sorted numerically and ascending
-            });
-            var velocities_to_average = Ext.Array.slice(velocities,0,3);
+//            velocities.sort(function sortfunction(a, b){
+//                return (a - b) //causes an array to be sorted numerically and ascending
+//            });
+//            var velocities_to_average = Ext.Array.slice(velocities,0,3);
+            var velocities_to_average = Ext.Array.slice(velocities,-3);
             
-            velocity = Math.floor( Ext.Array.mean(velocities_to_average));
+            velocity = Math.floor( Ext.Array.min(velocities_to_average));
             this._log(["worst", velocity_hash, velocities, velocities_to_average, velocity]);
         }
         return velocity;
