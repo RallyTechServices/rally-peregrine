@@ -202,7 +202,7 @@ Ext.define('CustomApp', {
                return item.get("ScheduleState")==state;
             }) ;
             
-        var count = _.reduce( recs, function(memo,item) { return memo + item.get("PlanEstimate");},0);
+        var count = recs.length;
         return count;
     },
     
