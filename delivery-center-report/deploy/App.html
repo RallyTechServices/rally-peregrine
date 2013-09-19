@@ -1172,7 +1172,7 @@
                 
                 showTable : function() {
             
-                    this.store = Ext.create('Ext.data.Store', {
+                    this.store = Ext.create('Rally.data.custom.Store', {
                         fields: [
                                 { name : "team" ,          type : "string"},
                                 { name : "iteration" ,     type : "string"},
@@ -1191,23 +1191,23 @@
                     });
             
                     // create the grid
-                    this.grid = Ext.create('Ext.grid.Panel', {
-                    //this.grid = Ext.create('Rally.ui.grid.Grid', {
+                    this.grid = Ext.create('Rally.ui.grid.Grid', {
                         // title: 'Defect Density',
                         store: this.store,
-                        columns: [
-                            { header : 'Team',           dataIndex: 'team'},
-                            { header : "Iteration",      dataIndex : "iteration"       },
-                            { header : "Completed<br/>(count)",    dataIndex : "completedCount",   align : "center"}, 
-                            { header : "Accepted<br/>(count)",     dataIndex : "acceptedCount",    align : "center"}, 
-                            { header : "Story Points",   dataIndex : "totalPoints",      align : "center"}, 
-                            { header : "Target<br>Velocity",dataIndex : "plannedVelocity",  align : "center"},
-                            { header : "Accepted<br/>Points",dataIndex : "accepted",  align : "center"}, 
-                            { header : "Velocity (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
-                            { header : "Velocity <br/>Utilization (%)",dataIndex : "velocityUtilization",  align : "center"}, 
-                            { header : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
-                            { header : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
-                            { header : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
+                        height: 550,
+                        columnCfgs: [
+                            { text : 'Team',           dataIndex: 'team'},
+                            { text : "Iteration",      dataIndex : "iteration" , flex: 1},
+                            { text : "Completed<br/>(count)",    dataIndex : "completedCount",   align : "center"}, 
+                            { text : "Accepted<br/>(count)",     dataIndex : "acceptedCount",    align : "center"}, 
+                            { text : "Story Points",   dataIndex : "totalPoints",      align : "center"}, 
+                            { text : "Target<br>Velocity",dataIndex : "plannedVelocity",  align : "center"},
+                            { text : "Accepted<br/>Points",dataIndex : "accepted",  align : "center"}, 
+                            { text : "Velocity (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
+                            { text : "Velocity <br/>Utilization (%)",dataIndex : "velocityUtilization",  align : "center"}, 
+                            { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
+                            { text : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
+                            { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
                         ]
                     });
                     // add it to the app
@@ -1230,7 +1230,7 @@
                         return value; 
                     }
                     if (value == "Red") {
-                        meta.style = 'background-color:red;color-white'; 
+                        meta.style = 'background-color:red;color:white'; 
                         return value; 
                     }
                     if (value == "Yellow") {
@@ -1246,7 +1246,7 @@
                     } else 
                         if (value > 7)
                         {
-                            meta.style = 'background-color:green;color-white'; 
+                            meta.style = 'background-color:green;color:white'; 
                             return value; 
                         }
                 }
