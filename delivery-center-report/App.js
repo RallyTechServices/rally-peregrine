@@ -17,7 +17,7 @@ Ext.define('CustomApp', {
         return new Date(Date.parse(ds));
     },
     
-    iterations : function(data) {
+    processIterations : function(data) {
         var that = this;
         var today = new Date();
 
@@ -48,14 +48,21 @@ Ext.define('CustomApp', {
             iterations = iterations.reverse();
 
             var iterationIds = _.pluck(iterations,function(i){return i.get("ObjectID");});
-            
-            async.map(iterations, that.getIterationResults, function(err,results){
+
+            async.map(iterations, that.getIterationWorkItems, function(err,work_items){
                 // console.log("results",results);
-                // that.process(key,iterations,results);
-                async.map(iterations,that.getSpecialStory,function(err,stories){
-                  that.process(key,iterations,results,stories);
+                async.map(iterations,that.getSpecialStory,function(err,special_stories){
+                  that.processWorkItems(key,iterations,work_items,special_stories);
                 });
             });
+            
+//            async.map(iterations, that.getIterationResults, function(err,results){
+//                // console.log("results",results);
+//                // that.process(key,iterations,results);
+//                async.map(iterations,that.getSpecialStory,function(err,stories){
+//                  that.processCFD(key,iterations,results,stories);
+//                });
+//            });
         });
 
     },
@@ -102,6 +109,43 @@ Ext.define('CustomApp', {
         
     },
 
+    getIterationWorkItems: function(iteration,callback){
+        var that = this;
+        Ext.create('Rally.data.WsapiDataStore',{
+            limit:'Infinity',
+            autoLoad: true,
+            model:'UserStory',
+            filters:[{
+                property: 'Iteration.ObjectID',
+                operator : "=",
+                value: iteration.get("ObjectID")
+            }],
+            listeners: {
+                load: function(store,stories,success){
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        limit:'Infinity',
+                        autoLoad: true,
+                        model:'Defect',
+                        filters:[{
+                            property: 'Iteration.ObjectID',
+                            operator : "=",
+                            value: iteration.get("ObjectID")
+                        }],
+                        listeners:{
+                            load: function(store,defects,success){
+                                var items = Ext.Array.push(stories,defects);
+                                callback(null,items);
+                            },
+                            scope: this
+                        }
+                    });
+                },
+                scope: this
+            }
+        });
+    },
+    
+    
     getIterationResults : function(iteration,callback) {
         var that = this;
         Ext.create('Rally.data.WsapiDataStore', {
@@ -131,7 +175,7 @@ Ext.define('CustomApp', {
         });
     },
     
-    sumForState : function(cfdRecs,state) {
+    sumCFDForState : function(cfdRecs,state) {
         var recs = state == "*" ? cfdRecs :
             _.filter(cfdRecs, function(cfd) {
                return cfd.get("CardState")==state;
@@ -141,42 +185,105 @@ Ext.define('CustomApp', {
         return sum;
     },
     
-    countForState : function(cfdRecs,state) {
-        var recs = state == "*" ? cfdRecs :
-            _.filter(cfdRecs, function(cfd) {
-               return cfd.get("CardState")==state;
+        
+    sumWIForState : function(items,state) {
+        var recs = state == "*" ? items :
+            _.filter(items, function(item) {
+               return item.get("ScheduleState")==state;
             }) ;
             
-        var count = _.reduce( recs, function(memo,cfd) { return memo + cfd.get("CardCount");},0);
+        var sum = _.reduce( recs, function(memo,item) { return memo + item.get("PlanEstimate");},0);
+        return sum;
+    },
+    
+    countWIForState : function(items,state) {
+        var recs = state == "*" ? items :
+            _.filter(items, function(item) {
+               return item.get("ScheduleState")==state;
+            }) ;
+            
+        var count = _.reduce( recs, function(memo,item) { return memo + item.get("PlanEstimate");},0);
         return count;
     },
-
+    
+    countCFDForState : function(cfdRecs,state) {
+        var recs = state == "*" ? cfdRecs :
+            _.filter(cfdRecs, function(cfd) {
+               return cfd.get("ScheduleState")==state;
+            }) ;
+            
+        var count = _.reduce( recs, function(memo,cfd) { return memo + cfdRecs.get("CardEstimateTotal");},0);
+        return count;
+    },
+    processWorkItems: function(team,iterations,work_items,special_stories){
+        var that = this;
+        
+        _.each(iterations,function(iteration,index) {
+            var iteration_work_items = work_items[index];
+            
+            var accepted = that.sumWIForState(iteration_work_items,"Accepted");
+            //var completed = that.sumWIForState(iteration_work_items,"Completed");
+            var completed = accepted + that.sumWIForState(iteration_work_items,"Completed");
+            var backlog = that.sumWIForState(iteration_work_items,"Backlog");
+            var defined = that.sumWIForState(iteration_work_items,"Defined");
+            var inprogress = that.sumWIForState(iteration_work_items,"In-Progress");
+            var total = that.sumWIForState(iteration_work_items,"*");
+            var totalCount = that.countWIForState(iteration_work_items,"*");
+            var acceptedCount = that.countWIForState(iteration_work_items,"Accepted");
+            //var completedCount = that.countWIForState(iteration_work_items,"Completed");
+            var completedCount = acceptedCount + that.countWIForState(iteration_work_items,"Completed");
+            
+            var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
+            
+            var plannedVelocity = iteration.get("PlannedVelocity");
+            var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
+            //console.log("pv",plannedVelocity);
+            
+            // add a row for each team, iteration combination
+            var row = { team            : team, 
+                        iteration       : iteration.get("Name"), 
+                        totalPoints     : total, 
+                        completedCount  : completedCount,
+                        plannedVelocity : plannedVelocity, 
+                        acceptedCount   : acceptedCount,
+                        velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
+                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
+                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
+                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
+                        accepted        : accepted,
+                        velocityUtilization : velocityUtilization
+            };
+            that.rows.push(row);
+            that.store.load();
+            
+        });
+    },
     
     // Team Name, Iteration Name, Total Points, Completed Count, Accepted Count, Planned Velocity, Velocity
     // Del Sat, Rem, Status
-
-    process : function( team, iterations, results, stories) {
+    
+    processCFD : function( team, iterations, cfd_records, stories) {
         var that = this;
         //console.log("stories",stories);
         
         _.each(iterations,function(iteration,x) {
             // group the cumulative flow records by creation date (we want to get the last da)
-            var gcfd = _.groupBy(results[x],function(cfd){return cfd.get("CreationDate");});
+            var gcfd = _.groupBy(cfd_records[x],function(cfd){return cfd.get("CreationDate");});
             // get records for the last day
             var lcfd = gcfd[ _.last(_.keys(gcfd))];
             // sum by state
             
-            var completed = that.sumForState(lcfd,"Completed");
-            var accepted = that.sumForState(lcfd,"Accepted");
-            var backlog = that.sumForState(lcfd,"Backlog");
-            var defined = that.sumForState(lcfd,"Defined");
-            var inprogress = that.sumForState(lcfd,"In-Progress");
-            var total = that.sumForState(lcfd,"*");
-            var totalCount = that.countForState(lcfd,"*");
-            var acceptedCount = that.countForState(lcfd,"Accepted");
-            var completedCount = that.countForState(lcfd,"Completed");
+            var completed = that.sumCFDForState(lcfd,"Completed");
+            var accepted = that.sumCFDForState(lcfd,"Accepted");
+            var backlog = that.sumCFDForState(lcfd,"Backlog");
+            var defined = that.sumCFDForState(lcfd,"Defined");
+            var inprogress = that.sumCFDForState(lcfd,"In-Progress");
+            var total = that.sumCFDForState(lcfd,"*");
+            var totalCount = that.countCFDForState(lcfd,"*");
+            var acceptedCount = that.countCFDForState(lcfd,"Accepted");
+            var completedCount = that.countCFDForState(lcfd,"Completed");
             
-            //console.log(team,iteration.get("Name"),results[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
+            //console.log(team,iteration.get("Name"),cfd_records[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
             
             var specialStory = stories[x] !== null && stories[x].length > 0 ? stories[x][0] : null;
             
@@ -230,7 +337,7 @@ Ext.define('CustomApp', {
             height: 550,
             columnCfgs: [
                 { text : 'Team',           dataIndex: 'team'},
-                { text : "Iteration",      dataIndex : "iteration" , flex: 1},
+                { text : "Iteration",      dataIndex : "iteration" },
                 { text : "User Stories Completed",    dataIndex : "completedCount",   align : "center"}, 
                 { text : "User Stories Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
                 { text : "Planned Story Points",   dataIndex : "totalPoints",      align : "center"}, 

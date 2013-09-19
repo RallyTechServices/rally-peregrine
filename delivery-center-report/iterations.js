@@ -34,7 +34,7 @@ function getIterations(app) {
         model: 'Iteration',
         listeners: {
             load: function(store, data, success) {
-                this.iterations(data);
+                this.processIterations(data);
             },
             scope : app
         },
