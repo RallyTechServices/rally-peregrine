@@ -1,4 +1,4 @@
-var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
+var    FIELD_DELIVERY_SATISFACTION = "c_Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "Notes";
 var    FIELD_STATUS = "Teamstatus";
 
@@ -206,7 +206,14 @@ Ext.define('CustomApp', {
         
         _.each(iterations,function(iteration,index){
             var specialStory = stories[index] !== null && stories[index].length > 0 ? stories[index][0] : null;
-            var satisfaction = specialStory !== null ? parseFloat(specialStory.get(FIELD_DELIVERY_SATISFACTION),10) : 0;
+            var satisfaction = 0;
+            if ( specialStory !== null ) {
+                me._log(["found story",specialStory]);
+                satisfaction = specialStory.get(FIELD_DELIVERY_SATISFACTION) || 0;
+                satisfaction = parseFloat(satisfaction,10);
+            }
+                            me._log(satisfaction);
+
             iteration.set('_satisfaction',satisfaction);
             
             var x_index = Ext.Array.indexOf(me._sprint_names,iteration.get('Name'));
