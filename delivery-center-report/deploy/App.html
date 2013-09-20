@@ -967,7 +967,7 @@
             
             }());            
             var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
-            var    FIELD_REMARKS = "Notes";
+            var    FIELD_REMARKS = "c_Managementinformationrequest";
             var    FIELD_STATUS = "Teamstatus";
             
             Ext.define('CustomApp', {
@@ -1057,6 +1057,7 @@
                         ],
                         listeners: {
                             load: function(store, data, success) {
+                                console.log(data);
                                 callback(null,data);
                             },
                             scope : that

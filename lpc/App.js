@@ -5,7 +5,7 @@ Ext.define('CustomApp', {
 
     // Title/version
     title: 'Lean Project Charter/Releae Predictability',
-    version: '0.50',
+    version: '0.60',
 
     // Global variables
     _debug: true,
@@ -923,7 +923,8 @@ Ext.define('CustomApp', {
 
     _getPlotLines: function(data) {
         var plotlines = [];
-        Ext.Array.each(this._iterations, function(iteration,index){
+        //Ext.Array.each(this._iterations, function(iteration,index){
+        Ext.Array.each(this._chart_data.Name, function(iteration,index){
             plotlines.push({
                 color: '#c0c0c0',
                 width: 1,
