@@ -206,13 +206,15 @@ Ext.define('CustomApp', {
         
         _.each(iterations,function(iteration,index){
             var specialStory = stories[index] !== null && stories[index].length > 0 ? stories[index][0] : null;
-            var satisfaction = 0;
+            var satisfaction = null;
             if ( specialStory !== null ) {
                 me._log(["found story",specialStory]);
-                satisfaction = specialStory.get(FIELD_DELIVERY_SATISFACTION) || 0;
-                satisfaction = parseFloat(satisfaction,10);
+                satisfaction = specialStory.get(FIELD_DELIVERY_SATISFACTION);
+                if ( satisfaction ) {
+                    satisfaction = parseFloat(satisfaction,10);
+                }
             }
-                            me._log(satisfaction);
+            me._log(satisfaction);
 
             iteration.set('_satisfaction',satisfaction);
             
@@ -230,7 +232,7 @@ Ext.define('CustomApp', {
             name: team,
             visible: true,
             marker: {
-                enabled: false
+                enabled: true
             }
         };
         me.project_hash[team].series = series_definition;
