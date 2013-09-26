@@ -8,7 +8,7 @@
     <script type="text/javascript">
         Rally.onReady(function() {
             /**
-             * version: '0.20'
+             * version: '0.30'
              */
              
                          /*global setImmediate: false, setTimeout: false, console: false */
@@ -1204,7 +1204,8 @@
                         var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
                         
                         var plannedVelocity = iteration.get("PlannedVelocity");
-                        var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
+                        //var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
+                        var velocityUtilization = plannedVelocity > 0 ? Math.round((accepted / total) * 100) : 0;
                         //console.log("pv",plannedVelocity);
                         
                         // add a row for each team, iteration combination
@@ -1311,8 +1312,8 @@
                             { text : "Planned Story Points",   dataIndex : "totalPoints",      align : "center"}, 
                             { text : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"},
                             { text : "Accepted Points",dataIndex : "accepted",  align : "center"}, 
-                            { text : "Velocity (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
-                            { text : "Velocity <br/>Utilization (%)",dataIndex : "velocityUtilization",  align : "center"}, 
+                            { text : "Target <br/>Utilization (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
+                            { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center"}, 
                             { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
                             { text : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
                             { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
