@@ -5,7 +5,7 @@ Ext.define('CustomApp', {
 
     // Title/version
     title: 'Lean Project Charter/Releae Predictability',
-    version: '0.60',
+    version: '0.70',
 
     // Global variables
     _debug: true,
@@ -48,6 +48,8 @@ Ext.define('CustomApp', {
 
     // Clears the asynch return flags and kicks off the data collection/charting process chain
     _kickOff: function() {
+        this._log("restart");
+        this.down('#chart_box').removeAll(true);
         this._asynch_return_flags = {};
         this._findChildProjects();
     },
@@ -996,9 +998,8 @@ Ext.define('CustomApp', {
                     this._assembleProjectedData();
                 }
 
-                if ( this._chart ) {
-                    this._chart.destroy();
-                }
+                this.down('#chart_box').removeAll(true);
+
 
                 var chart_hash = this._chart_data;
 
@@ -1010,9 +1011,8 @@ Ext.define('CustomApp', {
                     max = Ext.Array.max(chart_hash.CumulativePlannedVelocity);
                 }
         
-                this._log(["max",max]);
-                this._chart = this.down('#chart_box').add({
-                    xtype: 'rallychart',
+                var chart = Ext.create('Rally.ui.chart.Chart',{
+                    chartColors: ['#B5D8EB','#5C9ACB','#6ab17d','#f47168'],
                     chartData: {
                         categories: chart_hash.Name,
                         series: [
@@ -1068,7 +1068,8 @@ Ext.define('CustomApp', {
                     },
                     height: 350,
                     chartConfig: {
-                        chart: {},
+                        chart: {
+                        },
                         title: {
                             text: '',
                             align: 'center'
@@ -1112,7 +1113,8 @@ Ext.define('CustomApp', {
                         ]
                     }
                 });
-                this._chart.setChartColors(['#B5D8EB','#5C9ACB','#6ab17d','#f47168']);
+                chart.setChartColors(['#B5D8EB','#5C9ACB','#6ab17d','#f47168']);
+                this.down('#chart_box').add(chart);
             }
         }
     },
