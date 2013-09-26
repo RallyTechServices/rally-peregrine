@@ -143,7 +143,9 @@ Ext.define('CustomApp', {
             var iterations = me.project_hash[key].iterations;
             
             // use the special stories to build a store for the chart
-            async.map(iterations,me._getSpecialStory,function(err,stories){
+            async.map(iterations,function( iteration, callback) {
+                me._getSpecialStory(iteration,callback,me);
+            },function(err,stories){
               me._buildTeamData(key,iterations,stories);
             });
         });
@@ -152,8 +154,9 @@ Ext.define('CustomApp', {
     // The 'special' story is one which is in the iteration with a parent named
     // 'Iteration Reporting Parent'
     
-    _getSpecialStory : function( iteration, callback) {
-        var that = this;
+    _getSpecialStory : function( iteration, callback, that) {
+        var release = that.down('#release_cb').getRecord();
+        
         Ext.create('Rally.data.WsapiDataStore', {
             limit : 'Infinity',
             autoLoad : true,
@@ -168,6 +171,10 @@ Ext.define('CustomApp', {
                     property: 'Parent.Name',
                     operator : "contains",
                     value: 'Iteration Reporting Parent'
+                },
+                {
+                    property: 'Release.Name',
+                    value: release.get('Name')
                 }
             ],
             listeners: {
@@ -210,7 +217,10 @@ Ext.define('CustomApp', {
             if ( specialStory !== null ) {
                 me._log(["found story",specialStory]);
                 satisfaction = specialStory.get(FIELD_DELIVERY_SATISFACTION);
-                if ( satisfaction ) {
+                if ( satisfaction === "" ) {
+                    satisfaction = null;
+                }
+                if (satisfaction) {
                     satisfaction = parseFloat(satisfaction,10);
                 }
             }
