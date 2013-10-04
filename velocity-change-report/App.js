@@ -110,10 +110,22 @@ Ext.define('CustomApp', {
             quarter_averages.push(parseInt(Ext.Array.mean(velocity_array),10));
         });
         
+                
         project.set('q0_avg',quarter_averages[0]);
         project.set('q1_avg',quarter_averages[1]);
         project.set('q2_avg',quarter_averages[2]);
         project.set('q3_avg',quarter_averages[3]);
+        
+        if ( !isNaN(quarter_averages[0]) & !isNaN(quarter_averages[1]) ) {
+            project.set('q1_percent',(quarter_averages[1] - quarter_averages[0])/quarter_averages[0]);
+        }
+        if ( !isNaN(quarter_averages[1]) & !isNaN(quarter_averages[2]) ) {
+            project.set('q2_percent',(quarter_averages[2] - quarter_averages[1])/quarter_averages[1]);
+        }
+        if ( !isNaN(quarter_averages[2]) & !isNaN(quarter_averages[3]) ) {
+            project.set('q3_percent',(quarter_averages[3] - quarter_averages[2])/quarter_averages[2]);
+        }
+
     },
     _getQuarter:function(end_date,quarter_starts) {
         var me = this;
@@ -135,6 +147,12 @@ Ext.define('CustomApp', {
         } 
         return value;
     },
+    _renderPercent: function(value){
+        if (isNaN(value)){
+            return "";
+        }
+        return  parseInt( 100 * value , 10 ) + "%";
+    },
     _makeGrid: function(store) {
         var me = this;
         this.down('#grid_box').add(Ext.create('Rally.ui.grid.Grid',{
@@ -143,15 +161,15 @@ Ext.define('CustomApp', {
                 {text:'Name',dataIndex:'Name', flex: 1},
                 {text:'Q' + me.quarters[1], columns: [
                     {text:'Avg', dataIndex:'q1_avg',renderer:me._renderNumber},
-                    {text:'%',   dataIndex:'q1_percent'}
+                    {text:'%',   dataIndex:'q1_percent',renderer:me._renderPercent}
                 ]},
                 {text:'Q' + me.quarters[2], columns: [
                     {text:'Avg', dataIndex:'q2_avg',renderer:me._renderNumber},
-                    {text:'%',   dataIndex:'q2_percent'}
+                    {text:'%',   dataIndex:'q2_percent',renderer:me._renderPercent}
                 ]},
                 {text:'Q' + me.quarters[3], columns: [
                     {text:'Avg', dataIndex:'q3_avg',renderer:me._renderNumber},
-                    {text:'%',   dataIndex:'q3_percent'}
+                    {text:'%',   dataIndex:'q3_percent',renderer:me._renderPercent}
                 ]}
             ]
         }));
