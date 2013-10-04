@@ -5,7 +5,7 @@ Ext.define('CustomApp', {
 
     // Title/version
     title: 'Lean Project Charter/Releae Predictability',
-    version: '0.70',
+    version: '0.80',
 
     // Global variables
     _debug: true,
