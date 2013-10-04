@@ -339,7 +339,7 @@ Ext.define('CustomApp', {
             height: 550,
             columnCfgs: [
                 { text : 'Team',           dataIndex: 'team'},
-                { text : "Iteration",      dataIndex : "iteration" },
+                { text : "Iteration",      dataIndex : "iteration", flex: 1.1 },
                 { text : "User Stories Completed",    dataIndex : "completedCount",   align : "center"}, 
                 { text : "User Stories Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
                 { text : "Planned Story Points",   dataIndex : "totalPoints",      align : "center"}, 
@@ -348,7 +348,7 @@ Ext.define('CustomApp', {
                 { text : "Target <br/>Utilization (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
                 { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center"}, 
                 { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
-                { text : "Management information/request",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
+                { text : "Management information/request", dataIndex : "remarks", align : "center", tdCls: 'wrap', flex: 1}, 
                 { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
             ]
         });
