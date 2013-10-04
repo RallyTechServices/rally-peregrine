@@ -90,7 +90,6 @@ Ext.define('CustomApp', {
             ],
             listeners: {
                 load: function(store, data, success) {
-                    console.log(data);
                     callback(null,data);
                 },
                 scope : that
@@ -313,8 +312,8 @@ Ext.define('CustomApp', {
     },
     
     showTable : function() {
-
         var me = this;
+        var height = 500;
         this.store = Ext.create('Rally.data.custom.Store', {
             fields: [
                     { name : "team" ,          type : "string"},
@@ -337,7 +336,7 @@ Ext.define('CustomApp', {
         this.grid = Ext.create('Rally.ui.grid.Grid', {
             // title: 'Defect Density',
             store: this.store,
-            height: me.getHeight(),
+            height: height,
             columnCfgs: [
                 { text : 'Team',           dataIndex: 'team'},
                 { text : "Iteration",      dataIndex : "iteration", flex: 1.1 },
@@ -351,10 +350,15 @@ Ext.define('CustomApp', {
                 { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
                 { text : "Management information/request", dataIndex : "remarks", align : "center", tdCls: 'wrap', flex: 1}, 
                 { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
-            ]
+            ],
+            listeners: {
+                afterrender: function(grid) {
+                    grid.setHeight(me.getHeight()-20);
+                }
+            }
         });
         // add it to the app
-        this.add(this.grid);    
+        this.add(this.grid);
     },
     
     renderVelocity : function( value, meta ) {
