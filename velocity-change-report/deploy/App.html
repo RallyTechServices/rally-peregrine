@@ -11,7 +11,38 @@
              * version: '0.10'
              */
              
-                         /*global setImmediate: false, setTimeout: false, console: false */
+                         /*
+             */
+            Ext.define('Rally.technicalservices.logger',{
+                constructor: function(config){
+                    Ext.apply(this,config);
+                },
+                log: function(args){
+                    var output_args = [];
+                    if (arguments.length === 0 ) {
+                        window.console && console.log(arguments);
+                        return;
+                    }
+                    if (arguments.length === 1 ) {
+                        output_args = arguments;
+                    } else {
+                        var src_class = arguments[0];
+                        var class_name = "";
+                        if ( typeof(src_class) === "string" ) {
+                            class_name = src_class;
+                        } else if ( typeof src_class.getName === "function") { 
+                            class_name = src_class.getName();
+                        } else if (typeof src_class.self.getName === 'function'){
+                            class_name = src_class.self.getName();
+                        }
+                        //window.console && console.log(class_name,"--",message);
+                        output_args = Ext.Array.push(output_args,[class_name,"--"]);
+                        output_args = Ext.Array.push(output_args,Ext.Array.slice(arguments,1));
+                    }
+                    window.console && console.log.apply(console,output_args);
+                }
+            
+            });            /*global setImmediate: false, setTimeout: false, console: false */
             (function () {
             
                 var async = {};
@@ -968,13 +999,52 @@
             }());            Ext.define('CustomApp', {
                 extend: 'Rally.app.App',
                 componentCls: 'app',
-            
+                logger: new Rally.technicalservices.logger(),
                 launch: function() {
-                    this.rows = [];
-                    this.showTable();
-                    getIterations(this);
+                    this._getTeams();
                 },
-                
+                items: [{xtype:'container',itemId:'grid_box'}],
+                _getTeams: function() {
+                    var me = this;
+                    this.logger.log(this,this.getContext().getProject());
+                    var project_oid = this.getContext().getProject().ObjectID;
+                    
+                    var filters = Ext.create('Rally.data.QueryFilter',{ property: 'ObjectID',value:project_oid });
+                    filters = filters.or(Ext.create('Rally.data.QueryFilter',{property:'Parent.ObjectID',value:project_oid}));
+                    
+                    Ext.create('Rally.data.WsapiDataStore',{
+                        model: 'Project',
+                        autoLoad: true,
+                        filters: filters,
+                        listeners: {
+                            load: function(store,records,success){
+                                me.logger.log(this,records);
+                                me._makeGrid(store);
+                            }
+                        }
+                    });
+                    
+                },
+                _makeGrid: function(store) {
+                    this.down('#grid_box').add(Ext.create('Rally.ui.grid.Grid',{
+                        store: store,
+                        columnCfgs: [
+                            {text:'Name',dataIndex:'Name', flex: 1},
+                            {text:'Q1', columns: [
+                                {text:'Avg', dataIndex:'q1_avg'},
+                                {text:'%',   dataIndex:'q1_percent'}
+                            ]},
+                            {text:'Q2', columns: [
+                                {text:'Avg', dataIndex:'q2_avg'},
+                                {text:'%',   dataIndex:'q2_percent'}
+                            ]},
+                            {text:'Q3', columns: [
+                                {text:'Avg', dataIndex:'q3_avg'},
+                                {text:'%',   dataIndex:'q3_percent'}
+                            ]}
+                        ]
+                    }));
+                },
                 _toDate : function(ds) {
                     return new Date(Date.parse(ds));
                 }

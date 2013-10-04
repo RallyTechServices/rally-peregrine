@@ -5,6 +5,7 @@
    "sdk": "2.0rc1",
    "javascript": [
       "_version.js",
+      "_ts-logger.js",
       "lib/async.js",
       "App.js"
    ],
