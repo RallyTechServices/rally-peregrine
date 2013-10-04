@@ -411,7 +411,7 @@ Ext.define('CustomApp', {
                                         me._log("clearing velocity for " + iteration_name);
                                         me._velocities[iteration_name] = 0;
                                     }
-                                    me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
+                                    me._velocities[iteration_name] += parseFloat(record.get('PlanEstimate'), 10);
                                 }
                             }
                         }
@@ -442,7 +442,7 @@ Ext.define('CustomApp', {
                                         me._log("clearing velocity for " + iteration_name);
                                         me._velocities[iteration_name] = 0;
                                     }
-                                    me._velocities[iteration_name] += parseInt(record.get('PlanEstimate'), 10);
+                                    me._velocities[iteration_name] += parseFloat(record.get('PlanEstimate'), 10);
                                 }
                             }
                         }
@@ -514,7 +514,7 @@ Ext.define('CustomApp', {
                             if ( record.get('PlanEstimate') && !iteration) {
                                 // Check if Object's Release aligns with a Parent Project Release
                                 if (me._isAligned(release)) {
-                                    me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                    me._release_flow_hash[this_iteration_end_iso_string] += parseFloat(record.get('PlanEstimate'), 10);
                                 }
                             }
                         });
@@ -539,7 +539,7 @@ Ext.define('CustomApp', {
                             if ( record.get('PlanEstimate') && !iteration ) {
                                 // Check if Object's Release aligns with a Parent Project Release
                                 if (me._isAligned(release)) {
-                                    me._release_flow_hash[this_iteration_end_iso_string] += parseInt(record.get('PlanEstimate'), 10);
+                                    me._release_flow_hash[this_iteration_end_iso_string] += parseFloat(record.get('PlanEstimate'), 10);
                                 }
                             }
                         });
