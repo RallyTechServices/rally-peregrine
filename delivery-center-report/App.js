@@ -348,7 +348,7 @@ Ext.define('CustomApp', {
                 { text : "Target <br/>Utilization (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
                 { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center"}, 
                 { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
-                { text : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
+                { text : "Management information/request",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
                 { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
             ]
         });

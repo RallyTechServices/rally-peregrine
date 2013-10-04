@@ -8,10 +8,11 @@
     <script type="text/javascript">
         Rally.onReady(function() {
             /**
-             * version: '0.30'
+             * version: '0.40'
              */
              
-                         /*global setImmediate: false, setTimeout: false, console: false */
+             
+            /*global setImmediate: false, setTimeout: false, console: false */
             (function () {
             
                 var async = {};
@@ -1315,7 +1316,7 @@
                             { text : "Target <br/>Utilization (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
                             { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center"}, 
                             { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
-                            { text : "Remarks",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
+                            { text : "Management information/request",        dataIndex : "remarks",          align : "center", tdCls: 'wrap'}, 
                             { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
                         ]
                     });
