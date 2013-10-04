@@ -1114,16 +1114,18 @@
                     project.set('q2_avg',quarter_averages[2]);
                     project.set('q3_avg',quarter_averages[3]);
                     
-                    if ( !isNaN(quarter_averages[0]) & !isNaN(quarter_averages[1]) ) {
-                        project.set('q1_percent',(quarter_averages[1] - quarter_averages[0])/quarter_averages[0]);
-                    }
-                    if ( !isNaN(quarter_averages[1]) & !isNaN(quarter_averages[2]) ) {
-                        project.set('q2_percent',(quarter_averages[2] - quarter_averages[1])/quarter_averages[1]);
-                    }
-                    if ( !isNaN(quarter_averages[2]) & !isNaN(quarter_averages[3]) ) {
-                        project.set('q3_percent',(quarter_averages[3] - quarter_averages[2])/quarter_averages[2]);
-                    }
+                    project.set('q1_percent',me._getVelocityChange(quarter_averages[0],quarter_averages[1]));
+                    project.set('q2_percent',me._getVelocityChange(quarter_averages[1],quarter_averages[2]));
+                    project.set('q3_percent',me._getVelocityChange(quarter_averages[2],quarter_averages[3]));
+                    
             
+                },
+                _getVelocityChange: function(first_velocity,second_velocity) {
+                    if ( !isNaN(first_velocity) & !isNaN(second_velocity) && first_velocity !== 0 && second_velocity !== 0 ) {
+                        return (second_velocity - first_velocity)/first_velocity ;
+                    } else {
+                        return null;
+                    }
                 },
                 _getQuarter:function(end_date,quarter_starts) {
                     var me = this;
@@ -1139,15 +1141,19 @@
                     
                     return quarter;
                 },
-                _renderNumber: function(value){
-                    if (isNaN(value)) { 
-                        return "";
+                _renderNumber: function(value,metaData){
+                    if (isNaN(value) || value === 0) { 
+                        var color = "#D0D0D0";
+                        metaData.style = "background-color: " + color;
+                        return "<div style='text-align:center;background-color:" + color + "'>&nbsp;</div>";
                     } 
                     return value;
                 },
-                _renderPercent: function(value){
-                    if (isNaN(value)){
-                        return "";
+                _renderPercent: function(value,metaData){
+                    if (!value || isNaN(value)){
+                        var color = "#D0D0D0";
+                        metaData.style = "background-color: " + color;
+                        return "<div style='text-align:center;background-color:" + color + "'>&nbsp;</div>";
                     }
                     return  parseInt( 100 * value , 10 ) + "%";
                 },
