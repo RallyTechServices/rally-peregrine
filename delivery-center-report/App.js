@@ -314,6 +314,7 @@ Ext.define('CustomApp', {
     
     showTable : function() {
 
+        var me = this;
         this.store = Ext.create('Rally.data.custom.Store', {
             fields: [
                     { name : "team" ,          type : "string"},
@@ -336,7 +337,7 @@ Ext.define('CustomApp', {
         this.grid = Ext.create('Rally.ui.grid.Grid', {
             // title: 'Defect Density',
             store: this.store,
-            height: 550,
+            height: me.getHeight(),
             columnCfgs: [
                 { text : 'Team',           dataIndex: 'team'},
                 { text : "Iteration",      dataIndex : "iteration", flex: 1.1 },
