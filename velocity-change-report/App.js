@@ -123,10 +123,12 @@ Ext.define('CustomApp', {
 
     },
     _getVelocityChange: function(first_velocity,second_velocity) {
+        this.logger.log(this,first_velocity, second_velocity);
         if ( !isNaN(first_velocity) & !isNaN(second_velocity) && first_velocity !== 0 && second_velocity !== 0 ) {
             return (second_velocity - first_velocity)/first_velocity ;
         } else {
-            return null;
+            this.logger.log(this,"returning none");
+            return "none";
         }
     },
     _getQuarter:function(end_date,quarter_starts) {
@@ -152,7 +154,8 @@ Ext.define('CustomApp', {
         return value;
     },
     _renderPercent: function(value,metaData){
-        if (!value || isNaN(value)){
+        console.log("value:",value);
+        if (isNaN(value)){
             var color = "#D0D0D0";
             metaData.style = "background-color: " + color;
             return "<div style='text-align:center;background-color:" + color + "'>&nbsp;</div>";

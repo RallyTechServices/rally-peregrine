@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Velocity Change Report</title>
+    <title>Velocity Increase Report</title>
 
     <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function() {
             /**
-             * version: '0.10'
+             * version: '0.20'
              */
              
                          /*
@@ -1121,10 +1121,12 @@
             
                 },
                 _getVelocityChange: function(first_velocity,second_velocity) {
+                    this.logger.log(this,first_velocity, second_velocity);
                     if ( !isNaN(first_velocity) & !isNaN(second_velocity) && first_velocity !== 0 && second_velocity !== 0 ) {
                         return (second_velocity - first_velocity)/first_velocity ;
                     } else {
-                        return null;
+                        this.logger.log(this,"returning none");
+                        return "none";
                     }
                 },
                 _getQuarter:function(end_date,quarter_starts) {
@@ -1150,7 +1152,8 @@
                     return value;
                 },
                 _renderPercent: function(value,metaData){
-                    if (!value || isNaN(value)){
+                    console.log("value:",value);
+                    if (isNaN(value)){
                         var color = "#D0D0D0";
                         metaData.style = "background-color: " + color;
                         return "<div style='text-align:center;background-color:" + color + "'>&nbsp;</div>";
@@ -1184,7 +1187,7 @@
             });
 
             Rally.launchApp('CustomApp', {
-                name: 'Velocity Change Report'
+                name: 'Velocity Increase Report'
             });
         });
     </script>
