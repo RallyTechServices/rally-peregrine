@@ -1054,7 +1054,7 @@
                         model: 'Iteration',
                         autoLoad: true,
                         filters: iteration_query,
-                        fetch: ['Name', 'Project', 'ObjectID','PlannedVelocity','StartDate','EndDate'],
+                        fetch: ['Name', 'Project', 'ObjectID','PlannedVelocity','StartDate','EndDate', 'Children'],
                         sorters: [
                             {
                                 property: 'EndDate',
@@ -1073,9 +1073,16 @@
                 
                 _processIterations: function(records){
                     var me = this;
+                    // remove iterations that belong to projects with children (only show leaves)
+                    var filtered_iterations = [];
+                    Ext.Array.each(records, function(iteration){
+                        if ( iteration.get('Project').Children.Count === 0 ) {
+                            filtered_iterations.push(iteration);
+                        }
+                    });
                     // group the iterations we got back by their projects
                     // gives a hash where key is project name
-                    this.project_iterations = _.groupBy(records,function(iteration){
+                    this.project_iterations = _.groupBy(filtered_iterations,function(iteration){
                         var project = iteration.get('Project');
                         var name = project.Name;
                         return name;
@@ -1092,10 +1099,16 @@
                     
                     this._sprint_names = [];
                     // for the project that we're on, use it to set sprint names
-                    _.each(me.project_iterations[this.getContext().getProject().Name], function(iteration){
+            //        _.each(me.project_iterations[this.getContext().getProject().Name], function(iteration){
+            //            me._sprint_names.push(iteration.get('Name'));
+            //        });
+                    // use the first found child project to get the applicable sprints
+                    var key_project = Ext.Object.getKeys(me.project_iterations)[0];
+                    me._log(['using key',key_project]);
+                    
+                    _.each(me.project_iterations[key_project], function(iteration){
                         me._sprint_names.push(iteration.get('Name'));
                     });
-                    
                     if ( this._sprint_names.length == 0 ) {
                         this.down('#chart_box').add({
                             xtype:'container',
