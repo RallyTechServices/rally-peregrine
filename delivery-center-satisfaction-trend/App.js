@@ -92,7 +92,6 @@ Ext.define('CustomApp', {
             listeners: {
                 scope: this,
                 load: function(store, records) {
-                    this._log(['_iterations: ', records]);
                     this._processIterations(records);
                 }
             }
@@ -131,7 +130,8 @@ Ext.define('CustomApp', {
 //            me._sprint_names.push(iteration.get('Name'));
 //        });
         // use the first found child project to get the applicable sprints
-        var key_project = Ext.Object.getKeys(me.project_iterations)[0];
+        var project_keys = Ext.Object.getKeys(me.project_iterations);
+        var key_project = project_keys[0];
         me._log(['using key',key_project]);
         
         _.each(me.project_iterations[key_project], function(iteration){
@@ -228,7 +228,6 @@ Ext.define('CustomApp', {
             var specialStory = stories[index] !== null && stories[index].length > 0 ? stories[index][0] : null;
             var satisfaction = null;
             if ( specialStory !== null ) {
-                me._log(["found story",specialStory]);
                 satisfaction = specialStory.get(FIELD_DELIVERY_SATISFACTION);
                 if ( satisfaction === "" ) {
                     satisfaction = null;
@@ -239,7 +238,6 @@ Ext.define('CustomApp', {
                     satisfaction = null;
                 }
             }
-            me._log(satisfaction);
 
             iteration.set('_satisfaction',satisfaction);
             var x_index = Ext.Array.indexOf(me._sprint_names,iteration.get('Name'));
@@ -266,6 +264,50 @@ Ext.define('CustomApp', {
         this._defineChart();
     },
     
+    _defineAverage: function() {
+        var me = this;
+        this._log(["_defineAverage with project_hash:",this.project_hash]);
+        var project_names = Ext.Object.getKeys(this.project_hash);
+        if (project_names.length > 1 ) {
+            var averages = [];
+            
+
+            var key_project_name = project_names[0];
+            var data_length = this.project_hash[key_project_name].series.data.length;
+            this._log(["length:",data_length]);
+            for ( var i=0;i<data_length;i++ ) {
+                this._log("pass " + i);
+                var counter = 0;
+                var total = 0;
+                Ext.Array.each( project_names, function(project_name) {
+                    var score = me.project_hash[project_name].series.data[i];
+                    if ( score > 0 ) {
+                        counter += 1;
+                        total += score;
+                    }
+                });
+                if ( counter > 0 ) {
+                    averages.push(total/counter);
+                } else {
+                    averages.push(null);
+                }
+            }
+            
+            var average = { 
+                series: {
+                    name: 'Average',
+                    visible: true,
+                    type: 'line',
+                    data: averages,
+                    marker: { enabled: true }
+                }
+            };
+            this.project_hash["Average"] = average;
+        } else {
+            this._log("Not enough projects to make an average with");
+        }
+    },
+    
     _defineChart: function() {
         var me = this;
         this._log(["_defineChart",this.project_hash, this._sprint_names]);
@@ -274,6 +316,8 @@ Ext.define('CustomApp', {
             me._log("Waiting for " + _.keys(me.waiter).join(','));
             return;
         }
+        
+        this._defineAverage();
         
         var series = [];
         
