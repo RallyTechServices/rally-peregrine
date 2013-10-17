@@ -220,14 +220,15 @@ Ext.define('CustomApp', {
                 if ( satisfaction === "" ) {
                     satisfaction = null;
                 }
-                if (satisfaction) {
+                if (satisfaction && iteration.get('EndDate') < new Date()) {
                     satisfaction = parseFloat(satisfaction,10);
+                } else { 
+                    satisfaction = null;
                 }
             }
             me._log(satisfaction);
 
             iteration.set('_satisfaction',satisfaction);
-            
             var x_index = Ext.Array.indexOf(me._sprint_names,iteration.get('Name'));
             
             if ( x_index > -1 ) {

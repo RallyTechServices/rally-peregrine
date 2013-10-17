@@ -1,9 +1,27 @@
+var TARGETS = {
+    left: 0,
+    middle: 15,
+    right: 5
+};
+
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     logger: new Rally.technicalservices.logger(),
+    targets: TARGETS,
+    items: [
+        {xtype:'container',itemId:'grid_box'},
+        {
+            xtype:'container', 
+            itemId:'selector_box', 
+            padding: 5, 
+            tpl: 'Target increases by age: 0-6 sprints: {left}, 7-12 sprints: {middle}, >12 sprints: {right}'
+        }
+    ],
+    
     launch: function() {
         var me = this;
+        this._showTargets();
         var this_year = new Date().getFullYear();
         var this_month = new Date().getMonth();
         var this_quarter = Math.floor( (this_month+3)/3 );
@@ -23,34 +41,75 @@ Ext.define('CustomApp', {
             me.quarter_starts.push(quarter_start);
             me.quarters.push(quarter);
         });
+        
+        Rally.data.ModelFactory.getModel({
+            type:'Project',
+            success: function(model){
+                me.grid_store = Ext.create('Rally.data.custom.Store',{
+                    model:model
+                });
                 
-        this._getTeams();
+                me._makeGrid(me.grid_store);
+            }
+        })
+        
+        this._getTeams(this.getContext().getProject().ObjectID);
     },
-    items: [{xtype:'container',itemId:'grid_box'}],
-    _getTeams: function() {
+    _showTargets: function() {
+        this.down('#selector_box').update(this.targets);
+    },
+    _setSelectors: function(){
         var me = this;
-        var project_oid = this.getContext().getProject().ObjectID;
+        Ext.Object.each(me.targets, function(target,value){
+            var selector = me.down('#'+target);
+            selector.setValue(value);
+            selector.on('change', function(box,new_value,old_value) {
+                me.targets[target] = new_value;
+                if ( me.grid ) {
+                    me.logger.log(this,'update grid',me.targets);
+                    
+                    me.grid.show();
+                }
+            }, me );
+        });
+    },
+    _getTeams: function(parent_project_oid) {
+        var me = this;
+        this.logger.log(this,'_getTeams',parent_project_oid);
         
-        var filters = Ext.create('Rally.data.QueryFilter',{ property: 'ObjectID',value:project_oid });
-        filters = filters.or(Ext.create('Rally.data.QueryFilter',{property:'Parent.ObjectID',value:project_oid}));
+        var filters = Ext.create('Rally.data.QueryFilter',{ property: 'ObjectID',value:parent_project_oid });
+        var child_filters = Ext.create('Rally.data.QueryFilter',{property:'Parent.ObjectID',value:parent_project_oid});
+        filters = filters.or(child_filters);
         
-        var store = Ext.create('Rally.data.WsapiDataStore',{
+        Ext.create('Rally.data.WsapiDataStore',{
             model: 'Project',
             autoLoad: true,
             filters: filters,
+            fetch: ['Name','ObjectID','Children:summary'],
             listeners: {
                 load: function(store,records,success){
                     Ext.Array.each(records,function(record){
-                        me._getProjectData(record);
+                        var child_info = record.get('Summary').Children;
+                        if (child_info.Count === 0 ) {
+                            me.grid_store.add(record);
+                            me._getProjectData(record);
+                        } else {
+                            if ( record.get('ObjectID') !== parent_project_oid ) {
+                                // recurse
+                                me.logger.log(this,record.get('ObjectID'), record.get('Name'));
+                                me._getTeams(record.get('ObjectID'));
+                            }
+                        }
                     });
                 }
             }
         });
-        this._makeGrid(store);
+        // this._makeGrid(store);
     },
     _getProjectData:function(project){
         var me = this;
 
+        
         var start_date = Rally.util.DateTime.toIsoString(this.quarter_starts[0]);
         var end_date = Rally.util.DateTime.toIsoString(new Date());
         
@@ -87,9 +146,9 @@ Ext.define('CustomApp', {
     _calculateVelocities: function(project,work_items){
         var me = this;
         var velocities = [{}, {}, {}, {} ];
+        var count_sprints_with_velocities = 0;
         
         Ext.Array.each(work_items,function(work_item){
-            
             var quarter_counter = me._getQuarter(work_item.get('Iteration').EndDate,me.quarter_starts);
                         
             var iteration_oid = work_item.get('Iteration').ObjectID;
@@ -105,6 +164,7 @@ Ext.define('CustomApp', {
         Ext.Array.each(velocities,function(quarter_velocities){
             var velocity_array = [];
             Ext.Object.each(quarter_velocities,function(iteration,velocity){
+                if ( velocity > 0 ) { count_sprints_with_velocities += 1; }
                 velocity_array.push(velocity);
             });
             quarter_averages.push(parseInt(Ext.Array.mean(velocity_array),10));
@@ -119,15 +179,14 @@ Ext.define('CustomApp', {
         project.set('q1_percent',me._getVelocityChange(quarter_averages[0],quarter_averages[1]));
         project.set('q2_percent',me._getVelocityChange(quarter_averages[1],quarter_averages[2]));
         project.set('q3_percent',me._getVelocityChange(quarter_averages[2],quarter_averages[3]));
-        
+
+        project.set('age', count_sprints_with_velocities);
 
     },
     _getVelocityChange: function(first_velocity,second_velocity) {
-        this.logger.log(this,first_velocity, second_velocity);
         if ( !isNaN(first_velocity) & !isNaN(second_velocity) && first_velocity !== 0 && second_velocity !== 0 ) {
             return (second_velocity - first_velocity)/first_velocity ;
         } else {
-            this.logger.log(this,"returning none");
             return "none";
         }
     },
@@ -153,21 +212,40 @@ Ext.define('CustomApp', {
         } 
         return value;
     },
-    _renderPercent: function(value,metaData){
-        console.log("value:",value);
+    _renderPercent: function(value,metaData,record,rowIndex,colIndex,store,view){
         if (isNaN(value)){
             var color = "#D0D0D0";
             metaData.style = "background-color: " + color;
             return "<div style='text-align:center;background-color:" + color + "'>&nbsp;</div>";
+        } 
+        
+        var target_ranges = store.targets;
+        var age = record.get('age');
+        var green = '#99FF99';
+        var red = '#FF99CC';
+        
+        var color = green;
+        
+        if ( age > 12 && value < target_ranges['right']){
+            color = red;
+        } else if ( age > 6  && value < target_ranges['middle'] ) {
+            color = red;
+        } else if ( value < target_ranges['left'] ) {
+            color = red;
         }
+        
+        metaData.style = "background-color: " + color;
+
         return  parseInt( 100 * value , 10 ) + "%";
     },
     _makeGrid: function(store) {
         var me = this;
-        this.down('#grid_box').add(Ext.create('Rally.ui.grid.Grid',{
+        store.targets = me.targets;
+        this.grid = this.down('#grid_box').add(Ext.create('Rally.ui.grid.Grid',{
             store: store,
             columnCfgs: [
                 {text:'Name',dataIndex:'Name', flex: 1},
+                {text:'Age',dataIndex:'age'},
                 {text:'Q' + me.quarters[1], columns: [
                     {text:'Avg', dataIndex:'q1_avg',renderer:me._renderNumber},
                     {text:'%',   dataIndex:'q1_percent',renderer:me._renderPercent}
