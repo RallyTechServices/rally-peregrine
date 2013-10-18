@@ -7,6 +7,10 @@ var    THRESHOLD_SATISFACTION = 7;
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
+    
+    // Title/version
+    title: 'Delivery Center Status Report',
+    version: '0.40',
 
     launch: function() {
         console.log("launch");
