@@ -10,7 +10,7 @@ Ext.define('CustomApp', {
     
     // Title/version
     title: 'Delivery Center Status Report',
-    version: '0.40',
+    version: '0.50',
 
     launch: function() {
         console.log("launch");
