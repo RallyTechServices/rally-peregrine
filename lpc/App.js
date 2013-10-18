@@ -4,8 +4,8 @@ Ext.define('CustomApp', {
     defaults: { padding: 10, margin: 5 },
 
     // Title/version
-    title: 'Lean Project Charter/Releae Predictability',
-    version: '0.80',
+    title: 'Lean Project Charter/Release Predictability',
+    version: '0.90',
 
     // Global variables
     _debug: true,
@@ -37,6 +37,11 @@ Ext.define('CustomApp', {
         },
         {
             xtype: 'container',
+            itemId: 'message_box',
+            html: ''
+        },
+        {
+            xtype: 'container',
             itemId: 'chart_box'
         }
     ],
@@ -49,6 +54,7 @@ Ext.define('CustomApp', {
     // Clears the asynch return flags and kicks off the data collection/charting process chain
     _kickOff: function() {
         this._log("restart");
+        this.down('#message_box').removeAll(true);
         this.down('#chart_box').removeAll(true);
         this._asynch_return_flags = {};
         this._findChildProjects();
@@ -816,7 +822,91 @@ Ext.define('CustomApp', {
         }
         return backlog;
     },
-
+        _testForStoryOutOfBounds: function(){
+        this._log('_testForStoryOutOfBounds');
+        var release = this._release_combo_box.getRecord();
+        var base_filter = Ext.create('Rally.data.QueryFilter', {
+            property: 'Release.Name',
+            value: release.get('Name')
+        });
+        var is_after_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.StartDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseDate'))
+        });
+        var is_before_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.EndDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseStartDate'))
+        });
+        
+        var date_filters = is_after_filter.or(is_before_filter);
+        var filters = base_filter.and(date_filters);
+        
+        this._log(['filter:',filters.toString()]);
+        
+        Ext.create('Rally.data.WsapiDataStore', {
+            limit : 1,
+            pageSize: 1,
+            autoLoad : true,
+            model: 'HierarchicalRequirement',
+            filters: filters,
+            listeners: {
+                load: function(store, records, success) {
+                    this._log("count " + records.length);
+                    if ( records.length ) {
+                        this.down('#message_box').add({
+                            xtype: 'container',
+                            html: '* ' + release.get('Name') + ' has at least one story outside the timebox'
+                        });
+                    }
+                },
+                scope : this
+            },
+            fetch: ['FormattedID']
+        });
+    },
+    _testForDefectOutOfBounds: function(){
+        this._log('_testForDefectOutOfBounds');
+        var release = this._release_combo_box.getRecord();
+        var base_filter = Ext.create('Rally.data.QueryFilter', {
+            property: 'Release.Name',
+            value: release.get('Name')
+        });
+        var is_after_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.StartDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseDate'))
+        });
+        var is_before_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.EndDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseStartDate'))
+        });
+        
+        var date_filters = is_after_filter.or(is_before_filter);
+        var filters = base_filter.and(date_filters);
+                
+        Ext.create('Rally.data.WsapiDataStore', {
+            limit : 1,
+            pageSize: 1,
+            autoLoad : true,
+            model: 'Defect',
+            filters: filters,
+            listeners: {
+                load: function(store, records, success) {
+                    if ( records.length ) {
+                        this.down('#message_box').add({
+                            xtype: 'container',
+                            html: '* ' + release.get('Name') + ' has at least one defect outside the timebox'
+                        });
+                    }
+                },
+                scope : this
+            },
+            fetch: ['FormattedID']
+        });
+    },
     _isSelectedReleaseCurrent: function() {
         var today = new Date();
         var this_release = this._release_combo_box.getRecord();
@@ -990,6 +1080,8 @@ Ext.define('CustomApp', {
                     html: 'No iterations defined in the release bounds...'
                 });
             } else {
+                this._testForStoryOutOfBounds();
+                this._testForDefectOutOfBounds();
                 this._assembleSprintData();
 
                 // Only project if selected Release is current and we have velocity
@@ -999,7 +1091,6 @@ Ext.define('CustomApp', {
                 }
 
                 this.down('#chart_box').removeAll(true);
-
 
                 var chart_hash = this._chart_data;
 
