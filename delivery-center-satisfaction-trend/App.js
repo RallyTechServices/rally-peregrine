@@ -14,6 +14,11 @@ Ext.define('CustomApp', {
             defaults: { margin: 5 }
         },
         {
+            xtype: 'container',
+            itemId: 'message_box',
+            html: ''
+        },
+        {
             xtype:'container',
             itemId:'chart_box',
             defaults: {margin:5}
@@ -53,6 +58,7 @@ Ext.define('CustomApp', {
         var me = this;
 
         this.down('#chart_box').removeAll();
+        this.down('#message_box').removeAll();
         
         var release_box = this.down('#release_cb');
         var release = release_box.getRecord();
@@ -153,8 +159,8 @@ Ext.define('CustomApp', {
         
         _.each(_.keys(me.project_hash),function(key){
             me.waiter[key] = 1;
+            me._testForSpecialStoryOutOfBounds(key,me);
             var iterations = me.project_hash[key].iterations;
-            
             // use the special stories to build a store for the chart
             async.map(iterations,function( iteration, callback) {
                 me._getSpecialStory(iteration,callback,me);
@@ -163,7 +169,57 @@ Ext.define('CustomApp', {
             });
         });
     },
-    
+    _testForSpecialStoryOutOfBounds: function(project_name,scope){
+        scope._log('testing '+project_name);
+        var release = scope.down('#release_cb').getRecord();
+        var base_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Parent.Name',
+            operator : "contains",
+            value: 'Iteration Reporting Parent'
+        });
+        base_filter = base_filter.and(Ext.create('Rally.data.QueryFilter', {
+            property: 'Project.Name',
+            value: project_name
+        }));
+        base_filter = base_filter.and(Ext.create('Rally.data.QueryFilter', {
+            property: 'Release.Name',
+            value: release.get('Name')
+        }));
+        var is_after_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.StartDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseDate'))
+        });
+        var is_before_filter = Ext.create('Rally.data.QueryFilter',{
+            property: 'Iteration.EndDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(release.get('ReleaseStartDate'))
+        });
+        
+        var date_filters = is_after_filter.or(is_before_filter);
+        var filters = base_filter.and(date_filters);
+        
+        Ext.create('Rally.data.WsapiDataStore', {
+            limit : 1,
+            pageSize: 1,
+            autoLoad : true,
+            model: 'HierarchicalRequirement',
+            filters: filters,
+            listeners: {
+                load: function(store, records, success) {
+                    scope._log("count " + records.length);
+                    if ( records.length ) {
+                        scope.down('#message_box').add({
+                            xtype: 'container',
+                            html: '* ' + project_name + ' has at least one special story outside the timebox'
+                        });
+                    }
+                },
+                scope : scope
+            },
+            fetch: ['FormattedID']
+        });
+    },
     // The 'special' story is one which is in the iteration with a parent named
     // 'Iteration Reporting Parent'
     
@@ -271,10 +327,8 @@ Ext.define('CustomApp', {
         if (project_names.length > 1 ) {
             var averages = [];
             
-
             var key_project_name = project_names[0];
             var data_length = this.project_hash[key_project_name].series.data.length;
-            this._log(["length:",data_length]);
             for ( var i=0;i<data_length;i++ ) {
                 this._log("pass " + i);
                 var counter = 0;
