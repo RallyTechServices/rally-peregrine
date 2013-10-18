@@ -34,7 +34,8 @@ function getIterations(app) {
         model: 'Iteration',
         listeners: {
             load: function(store, data, success) {
-                this.processIterations(data);
+                //this.processIterations(data);
+                this.leafNodeProjectIterations(data);
             },
             scope : app
         },

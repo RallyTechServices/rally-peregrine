@@ -1,13 +1,15 @@
-
 var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "c_Managementinformationrequest";
 var    FIELD_STATUS = "Teamstatus";
+var    THRESHOLD_VELOCITY = 80;
+var    THRESHOLD_SATISFACTION = 7;
 
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
 
     launch: function() {
+        console.log("launch");
         this.rows = [];
         this.showTable();
         getIterations(this);
@@ -15,6 +17,22 @@ Ext.define('CustomApp', {
     
     _toDate : function(ds) {
         return new Date(Date.parse(ds));
+    },
+    
+    leafNodeProjectIterations : function(iterations) {
+        var that = this;
+        var projectOids = _.pluck(iterations,function(i) { return i.get("Project").ObjectID;});
+        projectOids = _.uniq(projectOids);
+        async.map(projectOids, that.readProject, function(err,projects){
+            // filter the iterations to just those with no children
+            iterations = _.filter(iterations,function(i) {
+                // find the project associated with this iteration
+                var p = _.find(projects,function(project) { return project.get("ObjectID")==i.get("Project").ObjectID;});
+                return p.get("Children") == null || p.get("Children").Count == 0;
+            });
+            // iterations = _.sortBy(iterations, function(i) {return i.get("Name");});
+            that.processIterations(iterations);
+        });
     },
     
     processIterations : function(data) {
@@ -27,8 +45,11 @@ Ext.define('CustomApp', {
             return name;
         });
         
-        _.each( _.keys(projectIterations), function(key) {
-            //console.log("team",key);
+        var keys = _.keys(projectIterations); // iteration names.
+        keys = _.sortBy(keys,function(k) {return k;});
+        console.log("keys",keys);
+        
+        _.each( keys, function(key) {
             var iterations = projectIterations[key];
             // filter to just those ones ended before today
             iterations = _.filter(iterations, function(iteration) {
@@ -50,19 +71,12 @@ Ext.define('CustomApp', {
             var iterationIds = _.pluck(iterations,function(i){return i.get("ObjectID");});
 
             async.map(iterations, that.getIterationWorkItems, function(err,work_items){
-                // console.log("results",results);
                 async.map(iterations,that.getSpecialStory,function(err,special_stories){
                   that.processWorkItems(key,iterations,work_items,special_stories);
                 });
+                // that.store.load();
             });
             
-//            async.map(iterations, that.getIterationResults, function(err,results){
-//                // console.log("results",results);
-//                // that.process(key,iterations,results);
-//                async.map(iterations,that.getSpecialStory,function(err,stories){
-//                  that.processCFD(key,iterations,results,stories);
-//                });
-//            });
         });
 
     },
@@ -145,7 +159,27 @@ Ext.define('CustomApp', {
         });
     },
     
-    
+    readProject : function(pOid,callback){
+        var that = this;
+        Ext.create('Rally.data.WsapiDataStore',{
+            limit:'Infinity',
+            autoLoad: true,
+            fetch : true,
+            model:'Project',
+            filters:[{
+                property: 'ObjectID',
+                operator : "=",
+                value: pOid
+            }],
+            listeners: {
+                load: function(store,projects,success){
+                    callback(null,projects[0]);
+                },
+                scope: this
+            }
+        });
+    },
+
     getIterationResults : function(iteration,callback) {
         var that = this;
         Ext.create('Rally.data.WsapiDataStore', {
@@ -235,19 +269,20 @@ Ext.define('CustomApp', {
             
             var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
             
-            var plannedVelocity = iteration.get("PlannedVelocity");
+            var plannedVelocity = iteration.get("PlannedVelocity") != null ? iteration.get("PlannedVelocity") : 0;
+            var velocity = plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0; 
             //var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
-            var velocityUtilization = plannedVelocity > 0 ? Math.round((accepted / total) * 100) : 0;
-            //console.log("pv",plannedVelocity);
-            
+            var velocityUtilization = ( plannedVelocity > 0 && total > 0 ) ? Math.round((accepted / total) * 100) : 0;
+
             // add a row for each team, iteration combination
             var row = { team            : team, 
                         iteration       : iteration.get("Name"), 
+                        enddate         : iteration.get("EndDate"),
                         totalPoints     : total, 
                         completedCount  : completedCount,
                         plannedVelocity : plannedVelocity, 
                         acceptedCount   : acceptedCount,
-                        velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
+                        velocity        : velocity,
                         deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
                         remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
                         status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
@@ -256,58 +291,17 @@ Ext.define('CustomApp', {
             };
             that.rows.push(row);
             that.store.load();
+            that.store.sort([
+                {
+                    property : 'team',
+                    direction: 'ASC'
+                },
+                {
+                    property : 'enddate',
+                    direction: 'DESC'
+                }
+            ]);
             
-        });
-    },
-    
-    // Team Name, Iteration Name, Total Points, Completed Count, Accepted Count, Planned Velocity, Velocity
-    // Del Sat, Rem, Status
-    
-    processCFD : function( team, iterations, cfd_records, stories) {
-        var that = this;
-        //console.log("stories",stories);
-        
-        _.each(iterations,function(iteration,x) {
-            // group the cumulative flow records by creation date (we want to get the last da)
-            var gcfd = _.groupBy(cfd_records[x],function(cfd){return cfd.get("CreationDate");});
-            // get records for the last day
-            var lcfd = gcfd[ _.last(_.keys(gcfd))];
-            // sum by state
-            
-            var completed = that.sumCFDForState(lcfd,"Completed");
-            var accepted = that.sumCFDForState(lcfd,"Accepted");
-            var backlog = that.sumCFDForState(lcfd,"Backlog");
-            var defined = that.sumCFDForState(lcfd,"Defined");
-            var inprogress = that.sumCFDForState(lcfd,"In-Progress");
-            var total = that.sumCFDForState(lcfd,"*");
-            var totalCount = that.countCFDForState(lcfd,"*");
-            var acceptedCount = that.countCFDForState(lcfd,"Accepted");
-            var completedCount = that.countCFDForState(lcfd,"Completed");
-            
-            //console.log(team,iteration.get("Name"),cfd_records[x].length,totalCount,total,backlog,defined,inprogress,completed,accepted);
-            
-            var specialStory = stories[x] !== null && stories[x].length > 0 ? stories[x][0] : null;
-            
-            var plannedVelocity = iteration.get("PlannedVelocity");
-            var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
-            //console.log("pv",plannedVelocity);
-            
-            // add a row for each team, iteration combination
-            var row = { team            : team, 
-                        iteration       : iteration.get("Name"), 
-                        totalPoints     : total, 
-                        completedCount  : completedCount,
-                        plannedVelocity : plannedVelocity, 
-                        acceptedCount   : acceptedCount,
-                        velocity        : plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0,
-                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
-                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
-                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
-                        accepted        : accepted,
-                        velocityUtilization : velocityUtilization
-            };
-            that.rows.push(row);
-            that.store.load();
         });
     },
     
@@ -318,6 +312,7 @@ Ext.define('CustomApp', {
             fields: [
                     { name : "team" ,          type : "string"},
                     { name : "iteration" ,     type : "string"},
+                    { name : "enddate",        type : "date"},
                     { name : "totalPoints",    type : "number"}, 
                     { name : "completedCount", type  : "number"},
                     { name : "plannedVelocity",type : "number"}, 
@@ -340,13 +335,14 @@ Ext.define('CustomApp', {
             columnCfgs: [
                 { text : 'Team',           dataIndex: 'team'},
                 { text : "Iteration",      dataIndex : "iteration", flex: 1.1 },
+                { text : "End Date",       dataIndex : "enddate", flex: 1.1,renderer: Ext.util.Format.dateRenderer() },
                 { text : "User Stories Completed",    dataIndex : "completedCount",   align : "center"}, 
                 { text : "User Stories Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
                 { text : "Planned Story Points",   dataIndex : "totalPoints",      align : "center"}, 
                 { text : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"},
                 { text : "Accepted Points",dataIndex : "accepted",  align : "center"}, 
-                { text : "Target <br/>Utilization (%)",       dataIndex : "velocity",         align : "center", renderer: this.renderVelocity }, 
-                { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center"}, 
+                { text : "Target <br/>Utilization (%)", dataIndex : "velocity", align : "center", renderer: this.renderVelocity }, 
+                { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center", renderer: this.renderVelocity }, 
                 { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
                 { text : "Management information/request", dataIndex : "remarks", align : "center", tdCls: 'wrap', flex: 1}, 
                 { text : "Status",         dataIndex : "status",           align : "center", renderer: this.renderStatus } 
@@ -362,7 +358,9 @@ Ext.define('CustomApp', {
     },
     
     renderVelocity : function( value, meta ) {
-        if (value < 80) { 
+        
+        //if (value < 80) { 
+        if (value < THRESHOLD_VELOCITY) { 
             meta.style = 'background-color:red;color:white;'; 
             return value; 
         } else {
@@ -387,11 +385,11 @@ Ext.define('CustomApp', {
     },
     
     renderSatisfaction : function( value, meta ) {
-        if (value >= 1 && value <= 7) { 
+        if (value >= 1 && value <= THRESHOLD_SATISFACTION) { 
             meta.style = 'background-color:red;color:white;'; 
             return value; 
         } else 
-            if (value > 7)
+            if (value > THRESHOLD_SATISFACTION)
             {
                 meta.style = 'background-color:green;color:white'; 
                 return value; 
