@@ -221,22 +221,24 @@ Ext.define('CustomApp', {
         
         var target_ranges = store.targets;
         var age = record.get('age');
+        value = parseInt( 100 * value , 10 );
+        
         var green = '#99FF99';
         var red = '#FF99CC';
         
         var color = green;
         
-        if ( age > 12 && value < target_ranges['right']){
+        if ( age <= 6 && value < target_ranges['left'] ) {
             color = red;
         } else if ( age > 6  && value < target_ranges['middle'] ) {
             color = red;
-        } else if ( value < target_ranges['left'] ) {
+        } else if ( age > 12 && value < target_ranges['right']){
             color = red;
         }
         
         metaData.style = "background-color: " + color;
 
-        return  parseInt( 100 * value , 10 ) + "%";
+        return  value + "%";
     },
     _makeGrid: function(store) {
         var me = this;
