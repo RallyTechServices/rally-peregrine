@@ -1083,7 +1083,7 @@
                         model: 'Project',
                         autoLoad: true,
                         filters: filters,
-                        fetch: ['Name','ObjectID','Children:summary'],
+                        fetch: ['Name','ObjectID','Children:summary','Iterations:summary'],
                         listeners: {
                             load: function(store,records,success){
                                 Ext.Array.each(records,function(record){
@@ -1105,6 +1105,12 @@
                     // this._makeGrid(store);
                 },
                 _getProjectData:function(project){
+                    var iteration_info = project.get('Summary').Iterations;
+            
+                    project.set('age', iteration_info.Count);
+                    this._getProjectVelocityData(project);
+                },
+                _getProjectVelocityData:function(project){
                     var me = this;
             
                     
@@ -1178,7 +1184,7 @@
                     project.set('q2_percent',me._getVelocityChange(quarter_averages[1],quarter_averages[2]));
                     project.set('q3_percent',me._getVelocityChange(quarter_averages[2],quarter_averages[3]));
             
-                    project.set('age', count_sprints_with_velocities);
+                    project.set('age_with_velocity', count_sprints_with_velocities);
             
                 },
                 _getVelocityChange: function(first_velocity,second_velocity) {
