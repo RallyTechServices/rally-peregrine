@@ -968,10 +968,12 @@
     }
 
 }());
-                var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
+var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "c_Managementinformationrequest";
 var    FIELD_STATUS = "Teamstatus";
 var	   FIELD_LPC_VELOCITY = "LPCVelocity";
+var    FIELD_TEAM_LIFECYCLE = "TeamLifecycle";
+var	   TEAM_LIFECYCLE_TO_HIDE = ["Temporary", "Not Started", "Inactive"];
 var    THRESHOLD_VELOCITY = 80;
 var    THRESHOLD_SATISFACTION = 7;
 
@@ -1094,7 +1096,8 @@ Ext.define('CustomApp', {
             FIELD_DELIVERY_SATISFACTION, 
             FIELD_REMARKS, 
             FIELD_STATUS,
-            FIELD_LPC_VELOCITY]
+            FIELD_LPC_VELOCITY, 
+            FIELD_TEAM_LIFECYCLE]
         });
         
     },
@@ -1230,56 +1233,59 @@ Ext.define('CustomApp', {
         
         _.each(iterations,function(iteration,index) {
             var iteration_work_items = work_items[index];
-            
-            var accepted = that.sumWIForState(iteration_work_items,"Accepted");
-            //var completed = that.sumWIForState(iteration_work_items,"Completed");
-            var completed = accepted + that.sumWIForState(iteration_work_items,"Completed");
-            var backlog = that.sumWIForState(iteration_work_items,"Backlog");
-            var defined = that.sumWIForState(iteration_work_items,"Defined");
-            var inprogress = that.sumWIForState(iteration_work_items,"In-Progress");
-            var totalCount = that.countWIForState(iteration_work_items,"*");
-            var acceptedCount = that.countWIForState(iteration_work_items,"Accepted");
-            //var completedCount = that.countWIForState(iteration_work_items,"Completed");
-            var completedCount = acceptedCount + that.countWIForState(iteration_work_items,"Completed");
-            
             var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
-            
-            console.log("Special Story: ", specialStory);
+            var teamLifecycle = specialStory !== null ? specialStory.get(FIELD_TEAM_LIFECYCLE) : "";
+            console.log("specialStory: ", specialStory);
+            console.log("teamLifecycle: ", teamLifecycle);
+            // do not show inactive, not started or temporary teams
+            if(TEAM_LIFECYCLE_TO_HIDE.indexOf(teamLifecycle) == -1) {
+                var accepted = that.sumWIForState(iteration_work_items,"Accepted");
+                //var completed = that.sumWIForState(iteration_work_items,"Completed");
+                var completed = accepted + that.sumWIForState(iteration_work_items,"Completed");
+                var backlog = that.sumWIForState(iteration_work_items,"Backlog");
+                var defined = that.sumWIForState(iteration_work_items,"Defined");
+                var inprogress = that.sumWIForState(iteration_work_items,"In-Progress");
+                var totalCount = that.countWIForState(iteration_work_items,"*");
+                var acceptedCount = that.countWIForState(iteration_work_items,"Accepted");
+                //var completedCount = that.countWIForState(iteration_work_items,"Completed");
+                var completedCount = acceptedCount + that.countWIForState(iteration_work_items,"Completed");
+                
+                var lpcVelocity = specialStory !== null ? specialStory.get(FIELD_LPC_VELOCITY) : 0;
+                
+                var plannedVelocity = iteration.get("PlannedVelocity") != null ? iteration.get("PlannedVelocity") : 0;
+                var targetUtilization = lpcVelocity > 0 ? Math.round(( plannedVelocity/lpcVelocity ) * 100) : 0; 
+                //var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
+                var velocityUtilization = plannedVelocity > 0  ? Math.round((accepted / plannedVelocity) * 100) : 0;
 
-            var lpcVelocity = specialStory !== null ? specialStory.get(FIELD_LPC_VELOCITY) : 0;
+                // add a row for each team, iteration combination
+                var row = { team            : team, 
+                            iteration       : iteration.get("Name"), 
+                            enddate         : iteration.get("EndDate"),
+                            lpcVelocity     : lpcVelocity, 
+                            completedCount  : completedCount,
+                            plannedVelocity : plannedVelocity, 
+                            acceptedCount   : acceptedCount,
+                            targetUtilization        : targetUtilization,
+                            deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
+                            remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
+                            status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
+                            accepted        : accepted,
+                            velocityUtilization : velocityUtilization
+                };
+                that.rows.push(row);
+                that.store.load();
+                that.store.sort([
+                    {
+                        property : 'team',
+                        direction: 'ASC'
+                    },
+                    {
+                        property : 'enddate',
+                        direction: 'DESC'
+                    }
+                ]);            	
+            }
             
-            var plannedVelocity = iteration.get("PlannedVelocity") != null ? iteration.get("PlannedVelocity") : 0;
-            var targetUtilization = lpcVelocity > 0 ? Math.round(( plannedVelocity/lpcVelocity ) * 100) : 0; 
-            //var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
-            var velocityUtilization = plannedVelocity > 0  ? Math.round((accepted / plannedVelocity) * 100) : 0;
-
-            // add a row for each team, iteration combination
-            var row = { team            : team, 
-                        iteration       : iteration.get("Name"), 
-                        enddate         : iteration.get("EndDate"),
-                        lpcVelocity     : lpcVelocity, 
-                        completedCount  : completedCount,
-                        plannedVelocity : plannedVelocity, 
-                        acceptedCount   : acceptedCount,
-                        targetUtilization        : targetUtilization,
-                        deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
-                        remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
-                        status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
-                        accepted        : accepted,
-                        velocityUtilization : velocityUtilization
-            };
-            that.rows.push(row);
-            that.store.load();
-            that.store.sort([
-                {
-                    property : 'team',
-                    direction: 'ASC'
-                },
-                {
-                    property : 'enddate',
-                    direction: 'DESC'
-                }
-            ]);
             
         });
     },
