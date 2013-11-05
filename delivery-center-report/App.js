@@ -1,6 +1,7 @@
 var    FIELD_DELIVERY_SATISFACTION = "Deliverysatisfactionscore110";
 var    FIELD_REMARKS = "c_Managementinformationrequest";
 var    FIELD_STATUS = "Teamstatus";
+var	   FIELD_LPC_VELOCITY = "LPCVelocity";
 var    THRESHOLD_VELOCITY = 80;
 var    THRESHOLD_SATISFACTION = 7;
 
@@ -122,7 +123,8 @@ Ext.define('CustomApp', {
             'ScheduleState','CreationDate',
             FIELD_DELIVERY_SATISFACTION, 
             FIELD_REMARKS, 
-            FIELD_STATUS]
+            FIELD_STATUS,
+            FIELD_LPC_VELOCITY]
         });
         
     },
@@ -265,7 +267,6 @@ Ext.define('CustomApp', {
             var backlog = that.sumWIForState(iteration_work_items,"Backlog");
             var defined = that.sumWIForState(iteration_work_items,"Defined");
             var inprogress = that.sumWIForState(iteration_work_items,"In-Progress");
-            var total = that.sumWIForState(iteration_work_items,"*");
             var totalCount = that.countWIForState(iteration_work_items,"*");
             var acceptedCount = that.countWIForState(iteration_work_items,"Accepted");
             //var completedCount = that.countWIForState(iteration_work_items,"Completed");
@@ -273,20 +274,22 @@ Ext.define('CustomApp', {
             
             var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
             
+            var lpcVelocity = specialStory !== null ? specialStory.get(FIELD_LPC_VELOCITY) : 0;
+            
             var plannedVelocity = iteration.get("PlannedVelocity") != null ? iteration.get("PlannedVelocity") : 0;
-            var velocity = plannedVelocity > 0 ? Math.round(( accepted / plannedVelocity ) * 100) : 0; 
+            var targetUtilization = lpcVelocity > 0 ? Math.round(( plannedVelocity/lpcVelocity ) * 100) : 0; 
             //var velocityUtilization = plannedVelocity > 0 ? Math.round((total / plannedVelocity) * 100) : 0;
-            var velocityUtilization = ( plannedVelocity > 0 && total > 0 ) ? Math.round((accepted / total) * 100) : 0;
+            var velocityUtilization = plannedVelocity > 0  ? Math.round((accepted / plannedVelocity) * 100) : 0;
 
             // add a row for each team, iteration combination
             var row = { team            : team, 
                         iteration       : iteration.get("Name"), 
                         enddate         : iteration.get("EndDate"),
-                        totalPoints     : total, 
+                        lpcVelocity     : lpcVelocity, 
                         completedCount  : completedCount,
                         plannedVelocity : plannedVelocity, 
                         acceptedCount   : acceptedCount,
-                        velocity        : velocity,
+                        targetUtilization        : targetUtilization,
                         deliverySatisfaction : specialStory !== null ? specialStory.get(FIELD_DELIVERY_SATISFACTION) : "",
                         remarks         : specialStory !== null ? specialStory.get(FIELD_REMARKS) : "",
                         status          : specialStory !== null ? specialStory.get(FIELD_STATUS) : "",
@@ -317,11 +320,11 @@ Ext.define('CustomApp', {
                     { name : "team" ,          type : "string"},
                     { name : "iteration" ,     type : "string"},
                     { name : "enddate",        type : "date"},
-                    { name : "totalPoints",    type : "number"}, 
+                    { name : "lpcVelocity",    type : "number"}, 
                     { name : "completedCount", type  : "number"},
                     { name : "plannedVelocity",type : "number"}, 
                     { name : "acceptedCount",  type : "number"},
-                    { name : "velocity",       type : "number"},
+                    { name : "targetUtilization",       type : "number"},
                     { name : "deliverySatisfaction", type : "string"},
                     { name : "remarks",        type : "string"},
                     { name : "status",         type : "string"},
@@ -340,12 +343,12 @@ Ext.define('CustomApp', {
                 { text : 'Team',           dataIndex: 'team'},
                 { text : "Iteration",      dataIndex : "iteration", flex: 1.1 },
                 { text : "End Date",       dataIndex : "enddate", flex: 1.1,renderer: Ext.util.Format.dateRenderer() },
-                { text : "User Stories Completed",    dataIndex : "completedCount",   align : "center"}, 
-                { text : "User Stories Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
-                { text : "Planned Story Points",   dataIndex : "totalPoints",      align : "center"}, 
+//                { text : "User Stories Completed",    dataIndex : "completedCount",   align : "center"}, 
+//                { text : "User Stories Accepted",     dataIndex : "acceptedCount",    align : "center"}, 
+                { text : "LPC Velocity",   dataIndex : "lpcVelocity",      align : "center"}, 
                 { text : "Target Velocity",dataIndex : "plannedVelocity",  align : "center"},
                 { text : "Accepted Points",dataIndex : "accepted",  align : "center"}, 
-                { text : "Target <br/>Utilization (%)", dataIndex : "velocity", align : "center", renderer: this.renderVelocity }, 
+                { text : "Target <br/>Utilization (%)", dataIndex : "targetUtilization", align : "center", renderer: this.renderVelocity }, 
                 { text : "Velocity (%)",dataIndex : "velocityUtilization",  align : "center", renderer: this.renderVelocity }, 
                 { text : "Delivery Satisfaction",dataIndex : "deliverySatisfaction", align : "center", renderer: this.renderSatisfaction}, 
                 { text : "Management information/request", dataIndex : "remarks", align : "center", tdCls: 'wrap', flex: 1}, 
