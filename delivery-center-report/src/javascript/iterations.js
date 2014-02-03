@@ -32,6 +32,7 @@ function getIterations(app) {
         limit : 'Infinity',
         autoLoad : true,
         model: 'Iteration',
+        context: { project: null },
         listeners: {
             load: function(store, data, success) {
                 //this.processIterations(data);

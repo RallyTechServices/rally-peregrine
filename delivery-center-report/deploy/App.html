@@ -3,11 +3,11 @@
 <head>
     <title>deliverycenterreport</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Dec 12 2013 08:21:14 GMT-0800 (PST) -->
+    <!--  Build Date: Sun Feb 02 2014 19:16:48 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Dec 12 2013 08:21:14 GMT-0800 (PST)";
-        var CHECKSUM = 80288359108;
+        var APP_BUILD_DATE = "Sun Feb 02 2014 19:16:48 GMT-0800 (PST)";
+        var CHECKSUM = 92791102323;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
@@ -971,6 +971,127 @@
 
 }());
 /**
+ * A link that pops up a version dialog box
+ */
+
+Ext.define('Rally.technicalservices.InfoLink',{
+    extend: 'Ext.Component',
+    alias: 'widget.tsinfolink',
+    
+    /**
+     * @cfg {String} informationHtml
+     * Additional text to be displayed on the popup dialog (for exmaple,
+     * to add a description of the app's use or functionality)
+     */
+    informationHtml: null,
+    
+    /**
+     * 
+     * cfg {String} title
+     * The title for the dialog box
+     */
+     text: "Information",
+    
+    renderTpl: "<div id='{id}-infolinkWrap' class='tsinfolink'>TS</div>",
+
+    initComponent: function() {
+        this.callParent(arguments);
+       
+    },
+    
+    onRender: function() {
+        this.callParent(arguments);
+        this.mon(this.el,'click',this.onClick,this);
+    },
+    _generateChecksum: function(string){
+        var chk = 0x12345678,
+            i;
+        string = string.replace(/var CHECKSUM = .*;/,"");
+        
+        for (i = 0; i < string.length; i++) {
+            chk += (string.charCodeAt(i) * i);
+        }
+    
+        return chk;
+    },
+    _checkChecksum: function(container) {
+        var me = this;
+        Ext.Ajax.request({
+            url: document.URL,
+            params: {
+                id: 1
+            },
+            success: function (response) {
+                text = response.responseText;
+                if ( CHECKSUM ) {
+                    if ( CHECKSUM !== me._generateChecksum(text) ) {
+                        console.log("Checksums don't match!");
+                        if ( me.dialog ) {
+                            me.dialog.add({xtype:'container',html:'Checksums do not match'});
+                        }
+                    }
+                }
+            }
+        });
+    },
+    onClick: function(e) {
+        var me = this;
+        this._checkChecksum(this);
+        
+        var dialog_items = [];
+        
+        if ( this.informationHtml ) {
+            dialog_items.push({
+                xtype:'container',
+                html: this.informationHtml
+            });
+        }
+                
+        dialog_items.push({
+            xtype:'container',
+            html:"This app was created by the Rally Technical Services Team."
+        });
+        
+        if ( APP_BUILD_DATE ) {
+            dialog_items.push({
+                xtype:'container',
+                html:'Build date/time: ' + APP_BUILD_DATE
+            });
+        }
+        
+        if (this.dialog){this.dialog.destroy();}
+        this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
+            defaults: { padding: 5, margin: 5 },
+            closable: true,
+            draggable: true,
+            title: me.title,
+            items: dialog_items
+        });
+        this.dialog.show();
+    }
+});
+/*
+ */
+Ext.define('Rally.technicalservices.Logger',{
+    constructor: function(config){
+        Ext.apply(this,config);
+    },
+    log: function(args){
+        var timestamp = "[ " + Ext.util.Format.date(new Date(), "Y-m-d H:i:s.u") + " ]";
+        //var output_args = arguments;
+        //output_args.unshift( [ "[ " + timestamp + " ]" ] );
+        //output_args = Ext.Array.push(output_args,arguments);
+        
+        var output_args = [];
+        output_args = Ext.Array.push(output_args,[timestamp]);
+        output_args = Ext.Array.push(output_args, Ext.Array.slice(arguments,0));
+
+        window.console && console.log.apply(console,output_args);
+    }
+
+});
+
+/**
  * version: '0.50'
  */
  
@@ -989,12 +1110,13 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     
+    logger: new Rally.technicalservices.Logger(),
     // Title/version
     title: 'Delivery Center Status Report',
     version: '0.50',
 
     launch: function() {
-        console.log("launch");
+        this.logger.log("launch");
         this.rows = [];
         this.showTable();
         getIterations(this);
@@ -1032,7 +1154,7 @@ Ext.define('CustomApp', {
         
         var keys = _.keys(projectIterations); // iteration names.
         keys = _.sortBy(keys,function(k) {return k;});
-        console.log("keys",keys);
+        this.logger.log("keys",keys);
         
         _.each( keys, function(key) {
             var iterations = projectIterations[key];
@@ -1243,8 +1365,8 @@ Ext.define('CustomApp', {
             var iteration_work_items = work_items[index];
             var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
             var teamLifecycle = specialStory !== null ? specialStory.get(FIELD_TEAM_LIFECYCLE) : "";
-            console.log("specialStory: ", specialStory);
-            console.log("teamLifecycle: ", teamLifecycle);
+            that.logger.log("specialStory: ", specialStory);
+            that.logger.log("teamLifecycle: ", teamLifecycle);
             // do not show inactive, not started or temporary teams
             if(TEAM_LIFECYCLE_TO_HIDE.indexOf(teamLifecycle) == -1) {
                 var accepted = that.sumWIForState(iteration_work_items,"Accepted");
@@ -1425,6 +1547,7 @@ function getIterations(app) {
         limit : 'Infinity',
         autoLoad : true,
         model: 'Iteration',
+        context: { project: null },
         listeners: {
             load: function(store, data, success) {
                 //this.processIterations(data);

@@ -4,10 +4,12 @@
    "server": "https://rally1.rallydev.com",
    "sdk": "2.0rc1",
    "javascript": [
-      "_version.js",
+      "src/javascript/_version.js",
       "lib/async.js",
-      "App.js",
-      "iterations.js"
+      "src/javascript/app.js",
+      "src/javascript/iterations.js",
+      "src/javascript/_ts-info-link.js",
+      "src/javascript/_ts-logger.js"
    ],
    "css": [
       "app.css"

@@ -11,12 +11,13 @@ Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
     
+    logger: new Rally.technicalservices.Logger(),
     // Title/version
     title: 'Delivery Center Status Report',
     version: '0.50',
 
     launch: function() {
-        console.log("launch");
+        this.logger.log("launch");
         this.rows = [];
         this.showTable();
         getIterations(this);
@@ -54,7 +55,7 @@ Ext.define('CustomApp', {
         
         var keys = _.keys(projectIterations); // iteration names.
         keys = _.sortBy(keys,function(k) {return k;});
-        console.log("keys",keys);
+        this.logger.log("keys",keys);
         
         _.each( keys, function(key) {
             var iterations = projectIterations[key];
@@ -265,8 +266,8 @@ Ext.define('CustomApp', {
             var iteration_work_items = work_items[index];
             var specialStory = special_stories[index] !== null && special_stories[index].length > 0 ? special_stories[index][0] : null;
             var teamLifecycle = specialStory !== null ? specialStory.get(FIELD_TEAM_LIFECYCLE) : "";
-            console.log("specialStory: ", specialStory);
-            console.log("teamLifecycle: ", teamLifecycle);
+            that.logger.log("specialStory: ", specialStory);
+            that.logger.log("teamLifecycle: ", teamLifecycle);
             // do not show inactive, not started or temporary teams
             if(TEAM_LIFECYCLE_TO_HIDE.indexOf(teamLifecycle) == -1) {
                 var accepted = that.sumWIForState(iteration_work_items,"Accepted");
