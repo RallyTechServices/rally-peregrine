@@ -10,7 +10,7 @@ module.exports = function(grunt) {
     
         config = grunt.file.readJSON('config.json');
 
-        config.js_files = grunt.file.expand(['src/javascript/*.js']);
+        config.js_files = grunt.file.expand(['lib/*.js','src/javascript/*.js']);
 
         config.ugly_files = grunt.file.expand(['deploy/app.min.*.js']);
         
@@ -128,7 +128,7 @@ module.exports = function(grunt) {
     grunt.loadNpmTasks('grunt-contrib-jasmine');
     grunt.loadNpmTasks('grunt-contrib-uglify');
     //tasks
-    grunt.registerTask('default', ['debug','build']);
+    grunt.registerTask('default', ['debug','build','ugly']);
     
     // (uses all the files in src/javascript)
     grunt.registerTask('build', "Create the html for deployment",['template:prod','setChecksum']);
