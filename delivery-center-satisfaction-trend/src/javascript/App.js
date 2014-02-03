@@ -162,11 +162,27 @@ Ext.define('CustomApp', {
             me._testForSpecialStoryOutOfBounds(key,me);
             var iterations = me.project_hash[key].iterations;
             // use the special stories to build a store for the chart
-            async.map(iterations,function( iteration, callback) {
-                me._getSpecialStory(iteration,callback,me);
-            },function(err,stories){
-              me._buildTeamData(key,iterations,stories);
+            
+            var promises = [];
+            Ext.Array.each(iterations, function(iteration) {
+                promises.push(me._getSpecialStory(iteration,me));    
             });
+            
+            Deft.Promise.all(promises).then({
+                success: function(stories) {
+                  // Do something with result.
+                    me._buildTeamData(key,iterations,stories);
+                },
+                failure: function(error) {
+                    alert("Problem loading special stories " + error);
+                }
+            });
+            
+//            _.map(iterations,function( iteration, callback) {
+//                me._getSpecialStory(iteration,callback,me);
+//            },function(err,stories){
+//              me._buildTeamData(key,iterations,stories);
+//            });
         });
     },
     _testForSpecialStoryOutOfBounds: function(project_name,scope){
@@ -223,8 +239,9 @@ Ext.define('CustomApp', {
     // The 'special' story is one which is in the iteration with a parent named
     // 'Iteration Reporting Parent'
     
-    _getSpecialStory : function( iteration, callback, that) {
+    _getSpecialStory : function( iteration, that) {
         var release = that.down('#release_cb').getRecord();
+        var deferred = Ext.create('Deft.Deferred');
         
         Ext.create('Rally.data.WsapiDataStore', {
             limit : 'Infinity',
@@ -248,7 +265,7 @@ Ext.define('CustomApp', {
             ],
             listeners: {
                 load: function(store, data, success) {
-                    callback(null,data);
+                    deferred.resolve(data);
                 },
                 scope : that
             },
@@ -264,7 +281,7 @@ Ext.define('CustomApp', {
             FIELD_REMARKS, 
             FIELD_STATUS]
         });
-        
+        return deferred.promise;
     },
     
     // create serieses for the chart
@@ -279,7 +296,7 @@ Ext.define('CustomApp', {
         _.each(me._sprint_names,function(name){
             data_array.push(null);
         });
-        
+                
         _.each(iterations,function(iteration,index){
             var specialStory = stories[index] !== null && stories[index].length > 0 ? stories[index][0] : null;
             var satisfaction = null;
