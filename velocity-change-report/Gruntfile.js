@@ -135,7 +135,7 @@ module.exports = function(grunt) {
     // 
     grunt.registerTask('debug', "Create an html file that can run in its own tab", ['template:dev']);
     //
-    grunt.registerTask('ugly', "Create the ugly html for deployment",['uglify:ugly','template:ugly','setChecksum']);
+    grunt.registerTask('ugly', "Create the ugly html for deployment",['uglify:ugly','template:ugly']);
 
     grunt.registerTask('test-fast', "Run tests that don't need to connect to Rally", ['jasmine:fast']);
     grunt.registerTask('test-slow', "Run tests that need to connect to Rally", ['jasmine:slow']);
