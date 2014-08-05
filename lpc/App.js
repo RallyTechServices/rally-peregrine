@@ -154,6 +154,7 @@ Ext.define('CustomApp', {
                             }
                         }
                     });
+                    console.log("release oids:",me._aligned_release_oids);
                     me._asynch_return_flags["aligned_releases"] = true;
                     me._findTodaysReleaseBacklog();
                     me._findReleaseBacklogAtEachIteration();
@@ -621,6 +622,7 @@ Ext.define('CustomApp', {
                         me._release_flow_hash[capture_date] += plan_estimate;
                     });
                     this._asynch_return_flags["flows"] = true;
+                    console.log("release data",me._release_flow_hash);
                     me._makeChart();
                 }
             }
@@ -1002,6 +1004,15 @@ Ext.define('CustomApp', {
 
 
                 var chart_hash = this._chart_data;
+                console.log("chart_hash",chart_hash);
+                var release_scope = [];
+
+                _.each(chart_hash.TotalBacklog,function(b,i) {
+                    var v = (i>0) ? ( (b !== null) ? b : _.last(release_scope)) : b;
+                    release_scope.push( v);
+                });
+
+                console.log("release_scope",release_scope);
 
                 var max = this._target_backlog * 1.25;
                 if ( Ext.Array.max(chart_hash.OptimisticProjectedVelocity) > max ) {
@@ -1016,12 +1027,12 @@ Ext.define('CustomApp', {
                     chartData: {
                         categories: chart_hash.Name,
                         series: [
-                            {
-                                type: 'column',
-                                data: chart_hash.CumulativePlannedVelocity,
-                                name: 'Planned Velocity',
-                                visible: true
-                            },
+                            // {
+                            //     type: 'column',
+                            //     data: chart_hash.CumulativePlannedVelocity,
+                            //     name: 'Planned Velocity',
+                            //     visible: true
+                            // },
                             /* --
                             {
                                 type: 'line',
@@ -1054,7 +1065,18 @@ Ext.define('CustomApp', {
                                 marker: {
                                     enabled: false
                                 }
+                            },
+                            {
+                                type: 'line',
+                                data: release_scope,
+                                name: 'Release Backlog',
+                                color: '#C0C0C0',
+                                visible: true,
+                                marker: {
+                                    enabled: false
+                                }
                             }/*,
+/*,
                             {
                                 type: 'line',
                                 data: chart_hash.TargetBacklog,
@@ -1085,17 +1107,17 @@ Ext.define('CustomApp', {
                                     }
                                 },
                                 plotLines: [
-                                    {
-                                        color: '#000',
-                                        width: 2,
-                                        value: this._target_backlog,
-                                        label: {
-                                            text: 'Target Backlog (Points)',
-                                            style: {
-                                                color: '#000'
-                                            }
-                                        }
-                                    }
+                                    // {
+                                    //     color: '#000',
+                                    //     width: 2,
+                                    //     value: this._target_backlog,
+                                    //     label: {
+                                    //         text: 'Target Backlog (Points)',
+                                    //         style: {
+                                    //             color: '#000'
+                                    //         }
+                                    //     }
+                                    // }
                                 ]
                             }
                         ],
@@ -1113,7 +1135,7 @@ Ext.define('CustomApp', {
                         ]
                     }
                 });
-                chart.setChartColors(['#B5D8EB','#5C9ACB','#6ab17d','#f47168']);
+                chart.setChartColors([ /*'#B5D8EB',*/'#5C9ACB','#6ab17d','#f47168']);
                 this.down('#chart_box').add(chart);
             }
         }
