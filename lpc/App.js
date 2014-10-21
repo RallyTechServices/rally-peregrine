@@ -43,7 +43,7 @@ Ext.define('CustomApp', {
 
     launch: function() {
         this._addReleaseSelector();
-        this._addTargetBacklogBox();
+        // this._addTargetBacklogBox();
     },
 
     // Clears the asynch return flags and kicks off the data collection/charting process chain
@@ -735,7 +735,7 @@ Ext.define('CustomApp', {
         // Add in the backlog target line and projected finish lines
         if (me._target_backlog === 0) {
             me._target_backlog = data.MostRecentBacklog;
-            me._target_backlog_number_box.setValue(data.MostRecentBacklog);
+            // me._target_backlog_number_box.setValue(data.MostRecentBacklog);
         }
 
         this._log( ["data at this point",data]);
