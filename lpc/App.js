@@ -1098,7 +1098,7 @@ Ext.define('CustomApp', {
                         },
                         yAxis: [
                             {
-                                max: max,
+                                // max: max,
                                 title: {
                                     enabled: true,
                                     text: 'Story Points',
